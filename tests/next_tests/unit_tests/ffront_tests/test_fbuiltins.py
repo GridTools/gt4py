@@ -61,6 +61,17 @@ def test_unary_math_builtin_scalar_preserves_dtype(name, dtype):
     assert type(getattr(fbuiltins, name)(value)) is dtype
 
 
+@pytest.mark.parametrize("name", fbuiltins.UNARY_MATH_NUMBER_BUILTIN_NAMES)
+def test_unary_math_builtin_of_python_int_is_numpy_int(name):
+    assert type(getattr(fbuiltins, name)(-1)) is np.int64
+
+
+@pytest.mark.parametrize("dtype", [np.int32, np.float32, np.float64])
+@pytest.mark.parametrize("name", fbuiltins.BINARY_MATH_NUMBER_BUILTIN_NAMES)
+def test_binary_math_builtin_scalar_preserves_dtype(name, dtype):
+    assert type(getattr(fbuiltins, name)(dtype(2), 3)) is dtype
+
+
 @pytest.mark.parametrize("dtype", [np.float32, np.float64])
 @pytest.mark.parametrize("name", fbuiltins.UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES)
 def test_unary_math_predicate_builtin_scalar_returns_bool(name, dtype):
