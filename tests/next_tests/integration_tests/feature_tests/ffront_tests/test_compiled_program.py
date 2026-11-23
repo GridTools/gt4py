@@ -170,7 +170,7 @@ def test_compile_kwargs(cartesian_case, compile_testee):
 
 
 def test_compile_without_offset_provider(cartesian_case, compile_testee):
-    if cartesian_case.backend is None:
+    if cases.runs_embedded(cartesian_case):
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     compile_testee.compile()
@@ -190,7 +190,7 @@ def test_compile_without_offset_provider(cartesian_case, compile_testee):
 
 @pytest.mark.uses_cartesian_shift
 def test_compile_cartesian_shift_without_offset_provider(cartesian_case):
-    if cartesian_case.backend is None:
+    if cases.runs_embedded(cartesian_case):
         pytest.skip("Embedded compiled program doesn't make sense.")
 
     @gtx.field_operator
