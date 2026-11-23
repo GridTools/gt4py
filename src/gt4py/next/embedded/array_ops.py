@@ -285,11 +285,11 @@ def is_0d_array(value: Any) -> bool:
     )
 
 
-#: What embedded accepts where it accepts a scalar: a scalar, or a 0-d array (`is_scalar_like`)
-ScalarLike: TypeAlias = core_defs.Scalar | core_defs.NDArrayObject
+#: A scalar or an array; `is_scalar_like` narrows to it, since typing has no 0-d arrays
+TensorLike: TypeAlias = core_defs.Scalar | core_defs.NDArrayObject
 
 
-def is_scalar_like(value: Any) -> TypeIs[ScalarLike]:
+def is_scalar_like(value: Any) -> TypeIs[TensorLike]:
     """A scalar, or a 0-d array."""
     return core_defs.is_scalar_type(value) or is_0d_array(value)
 
