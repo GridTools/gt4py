@@ -230,7 +230,12 @@ class ArrayOps:
             )
 
     def scalar(self, array: core_defs.NDArrayObject) -> Any:
-        """The element of the 0-d `array`, as a NumPy scalar."""
+        """
+        The element of the 0-d `array`, as a NumPy scalar.
+
+        Libraries with tracing override it to return a traced `array` itself: its value is
+        only known at run time.
+        """
         return self.to_numpy(array)[()]
 
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
@@ -270,7 +275,7 @@ def of(array: Any) -> ArrayOps:
         return ops
 
 
-def is_scalar_or_0d(value: Any) -> bool:
+def is_scalar_or_0d_array(value: Any) -> bool:
     """A scalar, or a 0-d array (e.g. a traced scalar argument under `jax.jit`)."""
     return core_defs.is_scalar_type(value) or (
         getattr(value, "ndim", None) == 0 and array_api_compat.is_array_api_obj(value)

@@ -286,7 +286,7 @@ def min_over(field: common.Field, /, axis: common.Dimension) -> common.Field:
 def broadcast(
     field: common.Field | core_defs.ScalarT, dims: tuple[common.Dimension, ...], /
 ) -> common.Field:
-    assert array_ops.is_scalar_or_0d(
+    assert array_ops.is_scalar_or_0d_array(
         field
     )  # default implementation for scalars, Fields are handled via dispatch
     # TODO(havogt) implement with FunctionField, the workaround is to ignore broadcasting on scalars as they broadcast automatically, but we lose the check for compatible dimensions
@@ -322,6 +322,7 @@ def astype(
     if isinstance(value, tuple):
         return tuple(astype(v, type_) for v in value)
     # default implementation for scalars, Fields are handled via dispatch
+    assert array_ops.is_scalar_or_0d_array(value)
     if core_defs.is_scalar_type(value):
         return core_defs.dtype(type_).scalar_type(value)
     ops = array_ops.of(value)
@@ -383,6 +384,7 @@ def _make_unary_math_builtin(name: str) -> BuiltInFunction:
     def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
         # TODO(havogt): enable tests in `test_math_builtin_execution.py`
         # default implementation for scalars, Fields are handled via dispatch
+        assert array_ops.is_scalar_or_0d_array(value)
         if core_defs.is_scalar_type(value):
             return cast(common.Field | core_defs.ScalarT, _math_builtin(value))
         return array_ops.of(value).elementwise_function(name)(value)
@@ -426,6 +428,7 @@ def _make_binary_math_builtin(name: str) -> BuiltInFunction:
         lhs: common.Field | core_defs.ScalarT, rhs: common.Field | core_defs.ScalarT, /
     ) -> common.Field | core_defs.ScalarT:
         # default implementation for scalars, Fields are handled via dispatch
+        assert array_ops.is_scalar_or_0d_array(lhs) and array_ops.is_scalar_or_0d_array(rhs)
         if core_defs.is_scalar_type(lhs) and core_defs.is_scalar_type(rhs):
             return getattr(np, name)(lhs, rhs)
         array = cast(core_defs.NDArrayObject, rhs if core_defs.is_scalar_type(lhs) else lhs)
