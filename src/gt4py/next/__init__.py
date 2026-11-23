@@ -97,6 +97,7 @@ from .ffront.fbuiltins import (
     where,
 )
 from .otf.compiled_program import wait_for_compilation
+from .program_processors.runners.dace import run_dace_cpu as dace_cpu, run_dace_gpu as dace_gpu
 from .program_processors.runners.gtfn import run_gtfn as gtfn_cpu, run_gtfn_gpu as gtfn_gpu
 from .program_processors.runners.roundtrip import default as itir_python
 
@@ -146,6 +147,8 @@ __all__ = [  # noqa: RUF022 [unsorted-dunder-all]
     # from program_processor
     "gtfn_cpu",
     "gtfn_gpu",
+    "dace_cpu",
+    "dace_gpu",
     "itir_python",
     # from fbuiltins
     "IndexType",
