@@ -19,6 +19,7 @@ import pytest
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, constructors
+from gt4py.next.errors import exceptions as gt4py_exceptions
 from gt4py.next.common import (
     Dimension,
     DimensionKind,
@@ -354,6 +355,42 @@ def test_as_scalar(nd_array_implementation):
     result = testee.as_scalar()
     assert result == 42.0
     assert isinstance(result, np.float32)
+
+
+_V = Dimension("V")
+_E = Dimension("E")
+_E2VDim = Dimension("E2V", kind=common.DimensionKind.LOCAL)
+_E2V = fbuiltins.FieldOffset("E2V", source=_V, target=(_E, _E2VDim))
+
+
+def _e2v_connectivity() -> common.Connectivity:
+    return common._connectivity(
+        np.asarray([[0, 1], [1, 2], [2, 0]], dtype=np.int32),
+        codomain=_V,
+        domain=common.domain({_E: 3, _E2VDim: 2}),
+    )
+
+
+def test_field_offset_at_index_is_resolved_by_premap():
+    field = common._field(np.asarray([10.0, 20.0, 30.0]), domain=common.domain({_V: 3}))
+    connectivity = _e2v_connectivity()
+
+    offset = _E2V[1]
+
+    assert offset == fbuiltins.FieldOffsetAtIndex(_E2V, 1)
+    with embedded_context.update(offset_provider={"E2V": connectivity}):
+        np.testing.assert_array_equal(
+            field(offset).asnumpy(),
+            field(connectivity[common.NamedIndex(_E2VDim, 1)]).asnumpy(),
+        )
+        np.testing.assert_array_equal(field(offset).asnumpy(), [20.0, 30.0, 10.0])
+
+
+def test_field_offset_at_index_without_offset_provider():
+    field = common._field(np.asarray([10.0, 20.0, 30.0]), domain=common.domain({_V: 3}))
+
+    with pytest.raises(gt4py_exceptions.EmbeddedExecutionError, match="No offset provider"):
+        field(_E2V[0])
 
 
 def product_nd_array_implementation_params():
