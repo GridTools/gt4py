@@ -7,6 +7,8 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import os
+import subprocess
+import sys
 
 import pytest
 
@@ -46,3 +48,21 @@ def test_env_flag_to_bool_invalid(env_var):
 def test_env_flag_to_bool_unset(env_var):
     _ = os.environ.pop(env_var, None)
     assert config.env_flag_to_bool(env_var, default=False) is False
+
+
+def test_python_debug_mode_warning_is_off_by_default():
+    """The `python -O` hint is opt-in: an unset environment variable must disable it."""
+    env = {k: v for k, v in os.environ.items() if k != "GT4PY_WARN_PYTHON_DEBUG_MODE"}
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from gt4py.next import config; print(config.WARN_PYTHON_DEBUG_MODE)",
+        ],
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+    assert result.stdout.strip() == "False"

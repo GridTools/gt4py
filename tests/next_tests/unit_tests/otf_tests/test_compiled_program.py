@@ -545,7 +545,7 @@ def _compile_and_collect_warnings(testee_prog) -> list[warnings.WarningMessage]:
     return caught
 
 
-def test_no_python_debug_mode_warning_by_default(testee_prog, noop_runner, monkeypatch):
+def test_no_python_debug_mode_warning_when_disabled(testee_prog, noop_runner, monkeypatch):
     """Running without `python -O` is the norm in notebooks and tests: no warning unless asked for."""
     monkeypatch.setattr(config, "WARN_PYTHON_DEBUG_MODE", False)
 

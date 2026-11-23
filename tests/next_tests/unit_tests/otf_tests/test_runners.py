@@ -16,6 +16,7 @@ import pickle
 import subprocess
 import sys
 import unittest.mock as mock
+from concurrent.futures.process import BrokenProcessPool
 
 import numpy as np
 import pytest
@@ -612,6 +613,15 @@ def test_default_runner_is_serial_in_worker_process():
         runners.reset_default_runner()
 
 
+def test_process_runner_submit_hints_at_broken_pool(process_runner):
+    broken_pool = mock.Mock(submit=mock.Mock(side_effect=BrokenProcessPool("boom")))
+    with mock.patch.object(process_runner, "_pool", broken_pool):
+        with pytest.raises(BrokenProcessPool) as exc_info:
+            process_runner.submit(_decomposed_task(executor=_RecursingExecutor(0)))
+
+    assert any('if __name__ == "__main__"' in note for note in exc_info.value.__notes__)
+
+
 def test_process_runner_refuses_to_start_while_a_worker_imports_main(tmp_path, monkeypatch):
     monkeypatch.setattr(multiprocessing.current_process(), "_inheriting", True, raising=False)
 
@@ -619,12 +629,12 @@ def test_process_runner_refuses_to_start_while_a_worker_imports_main(tmp_path, m
         runners.ProcessRunner(max_workers=1, shared_session_cache_dir=str(tmp_path))
 
 
-_UNGUARDED_SCRIPT = """
+_SCRIPT_TEMPLATE = """
 import gt4py.next.otf.runners as runners
 
 
 def executor(compilable):
-    raise AssertionError("must not run: the worker cannot even import this script")
+    raise AssertionError("executor ran in the worker")
 
 
 task = runners.CompilationTask(name="t", compilable=None, executor=executor)
@@ -645,7 +655,7 @@ def test_unguarded_script_fails_with_a_clear_message(tmp_path, guarded):
     if guarded:
         call = 'if __name__ == "__main__":\n' + "\n".join("    " + l for l in call.splitlines())
     script = tmp_path / "script.py"
-    script.write_text(_UNGUARDED_SCRIPT.format(call=call))
+    script.write_text(_SCRIPT_TEMPLATE.format(call=call))
 
     result = subprocess.run(
         [sys.executable, str(script)], capture_output=True, text=True, timeout=300, cwd=tmp_path
@@ -655,7 +665,7 @@ def test_unguarded_script_fails_with_a_clear_message(tmp_path, guarded):
     if guarded:
         # The worker imports the script without calling anything; the task itself
         # then fails with the executor's own error, which is propagated unchanged.
-        assert "AssertionError: must not run" in result.stderr
+        assert "AssertionError: executor ran in the worker" in result.stderr
     else:
         assert result.returncode != 0
         assert 'if __name__ == "__main__"' in result.stderr

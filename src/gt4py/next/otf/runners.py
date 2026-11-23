@@ -204,11 +204,13 @@ def add_hint_to_broken_pool_error(error: BaseException) -> None:
         error.add_note(_BROKEN_POOL_HINT)
 
 
-def _is_importing_main_module_in_worker() -> bool:
-    """Whether this is a spawned worker that is still importing the parent's `__main__`.
+def _is_importing_main_module_in_child_process() -> bool:
+    """Whether this is a child process that is still importing the parent's `__main__`.
 
-    ``spawn`` workers re-import the main module of the parent, before they are
-    flagged as child processes (`multiprocessing.parent_process()` is still `None`).
+    ``spawn`` and ``forkserver`` children (the compilation workers, or any other
+    process started by the script) re-import the main module of the parent before
+    they are flagged as child processes (`multiprocessing.parent_process()` is still
+    `None`). This is the flag the stdlib itself checks in `_check_not_importing_main`.
     """
     return getattr(multiprocessing.current_process(), "_inheriting", False)
 
@@ -225,10 +227,10 @@ class ProcessRunner:
     """
 
     def __init__(self, max_workers: int, shared_session_cache_dir: str) -> None:
-        if _is_importing_main_module_in_worker():
+        if _is_importing_main_module_in_child_process():
             raise RuntimeError(
-                "A compiled GT4Py program was called while a compilation worker process was "
-                "importing the main module of the script. Guard the entry point of the "
+                "A compiled GT4Py program was called while a child process (e.g. a GT4Py "
+                "compilation worker) was importing the main module of the script. Guard the entry point of the "
                 'script with `if __name__ == "__main__":` so that the calls only happen '
                 "in the main process (or set `GT4PY_BUILD_JOBS_MODE=serial`)."
             )
