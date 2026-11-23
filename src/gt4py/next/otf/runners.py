@@ -329,9 +329,15 @@ def get_default_runner() -> Runner:
     """
     global _default_runner
     with _default_runner_lock:
-        if _default_runner is None:
-            _default_runner = SerialRunner() if _is_worker_process() else from_config()
-        return _default_runner
+        if _default_runner is not None:
+            return _default_runner
+        runner = SerialRunner() if _is_worker_process() else from_config()
+        # A child process importing `__main__` is not flagged as a worker yet: do not
+        # keep the runner made for that phase (its `submit` refuses to start anyway),
+        # so that the child gets a serial one once it is set up.
+        if not _is_importing_main_module_in_child_process():
+            _default_runner = runner
+        return runner
 
 
 def reset_default_runner() -> None:

@@ -629,6 +629,19 @@ def test_default_runner_is_serial_in_worker_process():
         runners.reset_default_runner()
 
 
+def test_default_runner_made_while_a_child_imports_main_is_not_kept(monkeypatch):
+    """The runner made before the child is flagged as a worker must not stay the default."""
+    monkeypatch.setattr(config, "BUILD_JOBS_MODE", config.BuildJobsMode.PROCESS)
+    runners.reset_default_runner()
+    try:
+        with mock.patch.object(multiprocessing.current_process(), "_inheriting", True, create=True):
+            assert isinstance(runners.get_default_runner(), runners.ProcessRunner)
+        with mock.patch.object(multiprocessing, "parent_process", return_value=mock.Mock()):
+            assert isinstance(runners.get_default_runner(), runners.SerialRunner)
+    finally:
+        runners.reset_default_runner()
+
+
 def test_process_runner_submit_hints_at_broken_pool(process_runner):
     broken_pool = mock.Mock(submit=mock.Mock(side_effect=BrokenProcessPool("boom")))
     with mock.patch.object(process_runner, "_pool", broken_pool):
