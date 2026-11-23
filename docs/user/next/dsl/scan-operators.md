@@ -14,12 +14,11 @@ kernelspec:
 
 # Scan operators
 
-In a field operator, the value at a point is computed only from input values,
-never from results at other points, so all the points can be computed in any
-order. Some computations do not fit this model: integrating along a column,
-solving a tridiagonal system, or precipitation falling from one level to the
-next. In these, the value at a level depends on the _result_ of the previous
-level.
+In a field operator the result at a point never depends on the result at another
+point, so all the points can be computed in any order. Some computations do not
+fit this model: integrating along a column, solving a tridiagonal system, or
+letting precipitation fall from one level to the next. In these, the value at a
+level depends on the _result_ of the previous level.
 
 A **scan operator** expresses this kind of dependency along the vertical
 dimension. It replaces a loop over the levels.
@@ -39,7 +38,7 @@ IKField = gtx.Field[gtx.Dims[I, K], gtx.float64]
 ## A first scan operator
 
 A scan operator is a function describing **one step** of the iteration, the
-computation done at a single level. The following one computes a cumulative sum:
+computation done at a single level. This one computes a cumulative sum:
 
 ```{code-cell} ipython3
 @gtx.scan_operator(axis=K, forward=True, init=0.0)
@@ -51,12 +50,12 @@ def cumulative_sum(state: float, value: float) -> float:
   At the first step of the iteration it receives the value of `init`.
 - The other parameters receive the values of the arguments **at the current
   level**. Although the operator is called with fields, inside the function
-  they are scalars, annotated here with `float` (which means `float64`).
+  they are scalars, annotated here with `float` (the same as `gtx.float64`).
 - The returned value is the result at the current level, and it becomes the
   state of the next step.
 
-Applied to a field, the operator returns a field with the value computed at
-each level:
+The operator is applied to fields, and the result is a field with the value
+returned at every level:
 
 ```{code-cell} ipython3
 values = gtx.as_field({K: 5}, np.array([1.0, 2.0, 3.0, 4.0, 5.0]))
@@ -68,15 +67,15 @@ print(result.asnumpy())
 
 The decorator takes three arguments:
 
-| Argument  | Meaning                                                                                                                                                                                |
-| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `axis`    | Dimension to iterate over. It must be a `VERTICAL` dimension                                                                                                                           |
-| `forward` | `True` (the default) to go from the first level to the last one, `False` for the opposite                                                                                              |
-| `init`    | Value of the state at the first step (`0.0` by default). It must have exactly the type of the state: `0.0` for `float`, `gtx.float32(0.0)` for `gtx.float32`, `gtx.int64(0)` for `int` |
+| Argument  | Meaning                                                                     |
+| --------- | --------------------------------------------------------------------------- |
+| `axis`    | Dimension to iterate over. It must be a `VERTICAL` dimension                |
+| `forward` | `True` to go from the first level to the last one, `False` for the opposite |
+| `init`    | Value of the state at the first step. Its type is the type of the state     |
 
-The iteration covers the levels being computed. If the call has a `domain`
+The iteration covers the levels of the domain being computed: with a `domain`
 argument selecting a range of levels, the first step is the first level of that
-range, or the last one with `forward=False`.
+range.
 
 With `forward=False` the iteration starts at the last level:
 
@@ -94,8 +93,7 @@ print(result.asnumpy())
 
 A scan operator is called from a field operator like any other operator. Fields
 with horizontal dimensions are processed column by column, and every column is
-independent from the others. A scalar argument has the same value at every
-level.
+independent from the others. Scalar arguments are passed as they are.
 
 ```{code-cell} ipython3
 @gtx.field_operator
@@ -112,21 +110,22 @@ print(result_ik.asnumpy())
 ```
 
 ```{tip}
-Keep scan operators small: put in them only the part of the computation that
-depends on the previous level, and do everything else in field operators.
+Keep the scan operators small, with only the part of the computation which
+really depends on the previous level, and do everything else in field
+operators.
 ```
 
 A scan operator is a function of scalars, not of fields, so it cannot access
 the neighbors of a point. If the value of a neighbor is needed, compute it in
-the field operator and pass it as one more argument. For example, in a field
-operator with `values: IKField`, `some_scan(values, values(I + 1))`.
+the field operator and pass it as one more argument, for example
+`my_scan(values, values(I + 1))`.
 
 ## States with several values
 
 When several quantities are carried from level to level, the state needs to be
 a tuple or, better, a
-[named collection](field-operators.md#named-collections) of scalars. `init` and
-the returned value must have the same structure:
+[named collection](field-operators.md#named-collections) of scalars, and so are
+`init` and the result:
 
 ```{code-cell} ipython3
 import typing
@@ -151,24 +150,20 @@ def below_running_maximum(values: KField) -> KField:
     return stats.largest - values
 
 
-levels = gtx.as_field({K: 5}, np.array([1.0, 3.0, 2.0, 5.0, 4.0]))
-
-below_running_maximum(levels, out=result)
+below_running_maximum(gtx.as_field({K: 5}, np.array([1.0, 3.0, 2.0, 5.0, 4.0])), out=result)
 print(result.asnumpy())
 ```
 
 The result is zero at the levels where a new maximum is reached, and the
-distance to the largest value seen so far at the others. The values are assumed
-to be non-negative, because `largest` starts at `0.0`.
+distance to the largest value seen so far at the others.
 
-Because the arguments are scalars, the body can use regular `if` statements and
-conditional expressions, as in
-`value if value > state.largest else state.largest` above. Use them instead of
-`where`, which needs fields.
+Since the arguments are scalars, regular `if` statements and conditional
+expressions can be used in the body, as in
+`value if value > state.largest else state.largest` above.
 
-The scan stores the state at every level, so the result of `running_stats` is a
-`RunningStats` of two fields. The field operator that calls it picks the
-members it needs, like `stats.largest` above.
+The whole state is stored at every level, so the result of `running_stats` is a
+`RunningStats` of two fields. The field operator calling it decides which of
+them are needed.
 
 ## Rules
 
@@ -176,10 +171,7 @@ members it needs, like `stats.largest` above.
   the returned value must be the same.
 - All the parameters are scalars, or named collections or tuples of scalars,
   and they must be annotated.
-- Call a scan operator with at least one field argument, which defines the
-  columns it runs on. Calls with only scalar arguments are not supported.
-- The body follows the rules of the body of a
-  [field operator](field-operators.md), with one difference: the values are
-  scalars. Select with `if` or `x if condition else y`, not with `where`, and
-  do not use the built-ins that act on fields (`where`, `broadcast`, the
-  reductions).
+- A scan operator needs at least one field argument, which defines the columns
+  it runs on.
+- The body follows the same rules as the body of a
+  [field operator](field-operators.md).

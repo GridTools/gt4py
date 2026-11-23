@@ -83,9 +83,8 @@ The following functions create a field over a domain:
 | `gtx.as_field(domain, data, dtype)`   | Field with a copy of the array `data` |
 
 The domain can be passed as a `Domain` or directly as the dictionary accepted by
-`gtx.domain`. The default data type is `float64`. `gtx.full` and `gtx.as_field`
-take it from the given values instead, so `gtx.full(domain, 0)` creates an
-integer field: write `0.0`, or pass `dtype`, to get floating-point values.
+`gtx.domain`. The default data type is `float64`, except in `full` and
+`as_field`, which take it from the given values.
 
 ```{code-cell} ipython3
 plane = gtx.domain({I: 4, J: (2, 5)})
@@ -99,10 +98,9 @@ print(level_index.domain, level_index.asnumpy().dtype)
 ```
 
 `gtx.as_field` always **copies** the data: the field does not share memory with
-the original array. It also accepts a list of dimensions instead of a domain.
-The ranges then start at zero and have the sizes of the array. The optional
-`origin` argument gives the array index which corresponds to the grid index
-zero. Below, `origin={I: 1}` makes the `I` range start at `-1`:
+the original array. It also accepts a list of dimensions instead of a domain. In
+that case the ranges start at zero and have the sizes of the array, unless the
+`origin` argument says which array index corresponds to the grid index zero:
 
 ```{code-cell} ipython3
 data = np.arange(18.0).reshape(6, 3)
@@ -113,35 +111,33 @@ print(gtx.as_field([I, J], data, origin={I: 1}).domain)
 
 ### Allocating for a backend
 
-By default, fields are allocated in main memory, as NumPy arrays with a memory
-layout and alignment suited to the CPU backends. The `allocator` argument
-selects a different way of allocating the buffer. Passing a backend allocates
-the field as that backend prefers, with the memory layout, the alignment and
-the device (CPU or GPU) it needs:
+By default, fields are allocated in main memory as NumPy arrays. The `allocator`
+argument selects a different way of allocating the buffer. Passing a backend
+allocates the field as that backend prefers, with the memory layout, the
+alignment and the device (CPU or GPU) it needs:
 
 ```{code-cell} ipython3
 temperature_cpu = gtx.zeros(plane, allocator=gtx.gtfn_cpu)
 ```
 
 ```{tip}
-Allocate the fields with the backend that is going to run the operators. For
+Allocate the fields with the backend which is going to run the operators. For
 GPU backends it is required, since the fields must be on the device.
 ```
 
 ### Allocating for embedded execution
 
 In [embedded execution](running.md#embedded-execution) the operations are
-evaluated by the array library holding the data of the fields. Passing the
-array namespace of a library as `allocator` allocates the field with that
-library, as a plain array without a special memory layout. For NumPy:
+evaluated by the array library holding the data of the fields. The library is
+selected by passing its array namespace as `allocator`. For NumPy, which is the
+default:
 
 ```{code-cell} ipython3
 temperature_numpy = gtx.zeros(plane, allocator=np)
 ```
 
 Other libraries are used in the same way, for example CuPy to run on a GPU, or
-JAX. They are optional dependencies, installed with extras of the package such
-as `pip install "gt4py[cuda12]"` (CuPy) or `pip install "gt4py[jax]"`:
+JAX:
 
 ```python
 import cupy as cp
@@ -153,7 +149,7 @@ temperature_jax = gtx.zeros(plane, allocator=jnp)  # a JAX array on the default 
 
 Alternatively, the `device` argument selects where the data lives, and the
 field is allocated with the default library for that kind of device (CuPy for
-GPUs, which must be installed):
+GPUs):
 
 ```python
 gpu = gtx.Device(gtx.DeviceType.CUDA, 0)  # the first CUDA device
@@ -161,8 +157,8 @@ gpu = gtx.Device(gtx.DeviceType.CUDA, 0)  # the first CUDA device
 temperature_gpu = gtx.zeros(plane, device=gpu)
 ```
 
-In embedded execution, all the fields used in a call, including `out`, must be
-held by the same array library.
+All the fields used in a call, including `out`, must be held by the same array
+library.
 
 ## Reading the data
 
@@ -259,26 +255,22 @@ e2c_connectivity = gtx.as_connectivity([Edge, E2CDim], codomain=Cell, data=edge_
 print(e2c_connectivity.domain)
 ```
 
-- In the offset, `source` is the dimension of the field that is read (cells),
-  and `target` lists the dimensions of the result: the edges, plus the local
-  dimension that numbers the neighbors. `E2C` therefore turns a field on cells
-  into a field on edges with an extra local dimension.
+- In the offset, `source` is the dimension of the field which is read (cells),
+  and `target` are the dimensions of the result: the edges, plus the local
+  dimension numbering the neighbors. `E2C` therefore turns a field on cells into
+  a field on edges.
 - In `as_connectivity`, the first argument gives the dimensions of the table and
   `codomain` is the dimension its entries point to.
-- The value that marks the missing neighbors is the `skip_value` of the
-  connectivity. By default, `as_connectivity` sets it to `-1` if the table
-  contains any `-1`, and to none (no missing neighbors) otherwise. Pass the
-  `skip_value` argument to choose a different value.
+- The value marking the missing neighbors is the `skip_value` of the
+  connectivity. `as_connectivity` uses `-1` when the table contains any `-1`,
+  and it can also be set with the `skip_value` argument.
 
 The offset is only a symbol. This keeps the operators independent of the mesh:
 the same code runs on a different mesh by providing a different table.
 
 ```{important}
 Give the same name to the local dimension and to the offset (`"E2C"` above).
-The reductions over the neighbors look up the connectivity in the
-`offset_provider` by the name of the local dimension. If the names differ, the
-call fails with a `KeyError` saying that the offset was not found in the offset
-provider.
+The reductions over the neighbors rely on it to find the connectivity.
 ```
 
 ### The offset provider

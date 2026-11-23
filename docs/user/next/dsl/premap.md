@@ -15,10 +15,9 @@ kernelspec:
 # Premap and neighbors
 
 Stencil computations combine the value at a grid point with the values at
-neighboring points. Inside a field operator a field cannot be indexed, as in
-`a[i + 1]`. Instead, the field is **called** with an offset, and the result is
-a new field holding the values of the neighbors. This operation is called
-**premap**.
+neighboring points. In GT4Py there are no indices to do that. Instead, a field
+is **called** with an offset, and the result is a new field holding the values
+of the neighbors. This operation is called **premap**.
 
 - On a Cartesian grid the offset is a dimension plus an integer, as in
   `a(I + 1)`.
@@ -26,14 +25,13 @@ a new field holding the values of the neighbors. This operation is called
   stands for a connectivity table, as in `a(E2C[0])`.
 
 ```{note}
-The name comes from seeing a field as a function from grid points to values,
-and an offset as a function from every point to one of its neighbors. Calling
-a field with an offset composes the two: the offset is applied first, _before_
+The name comes from seeing a field as a function from grid points to values.
+An offset is a function too, from every point to one of its neighbors. Calling
+the field with the offset composes both: the offset is applied first, _before_
 the field, and the result is again a field. It is plain function composition,
-like the familiar `map` (or `fmap`), but in the opposite order: `map` applies a
-function to the values of a collection, that is, _after_ the field. Other
-languages have other names for the same operation, for example `contramap` in
-Haskell.
+like the familiar `map` (or `fmap`) which applies a function to the values of a
+collection, but in the opposite order. Other languages have other names for the
+same operation, for example `contramap` in Haskell.
 ```
 
 ```{code-cell} ipython3
@@ -60,8 +58,7 @@ def forward_difference(a: IField) -> IField:
 ```
 
 The last point has no neighbor to the right, so the result cannot be computed
-there. The `domain` argument restricts the call to the points where it can
-(the end of a range is excluded):
+there. The `domain` argument restricts the call to the points where it can:
 
 ```{code-cell} ipython3
 result = gtx.zeros({I: 6})
@@ -71,16 +68,14 @@ print(result.asnumpy())
 ```
 
 Premap can be applied to any expression and chained, and fields with several
-dimensions accept offsets along any of them. With a second dimension `J`, a
-vertical dimension `K` and a second field `b`:
+dimensions accept offsets along any of them:
 
 ```python
 a(I + 1)(J - 1)  # diagonal neighbor of a field over I, J
 (a * b)(K - 1)  # value of the product at the previous K level
 ```
 
-The offset must be a literal: `a(I + n)` is not supported, neither with an
-argument `n` nor with a constant defined outside of the operator.
+The offset must be a literal: `a(I + n)` with a variable `n` is not supported.
 
 ### Premap and domains
 
@@ -94,17 +89,16 @@ print((a(I + 1) - a(I - 1)).domain)
 ```
 
 `a(I + 1)` contains the same values as `a`, relabeled one position to the left:
-a Cartesian offset moves the domain of a field, but it does not make it
-smaller. An operation between fields is defined only at the points that all its
+premap with a Cartesian offset moves the domain of a field, it does not make
+it smaller. An operation between fields is defined at the points which all its
 operands have in common. Combining the results of different offsets therefore
-gives a result on a smaller domain than the original field.
+gives a result on a smaller domain than the one of the original field.
 
 ```{warning}
 Embedded execution checks the domains, and it reports an error when a result is
 requested at points where it cannot be computed. The compiled backends do not
-check them: an operator like `forward_difference` called on the whole field
-reads outside of its input and returns a wrong value at the last point, without
-any error. Test new operators in embedded execution first.
+check them: they read outside of the fields and give wrong values without any
+error. Test new operators in embedded execution first.
 ```
 
 ### Boundaries with `concat_where`
@@ -115,8 +109,8 @@ any error. Test new operators in embedded execution first.
 ```
 
 Restricting the domain leaves the boundary points untouched. When they need a
-value of their own, as in boundary conditions, use `concat_where`. It is
-similar to `where`, but its condition is a **region of the grid**, written as a
+value of their own, as in boundary conditions, use `concat_where`. It is similar
+to `where`, but its condition is a **region of the grid**, written as a
 comparison between a dimension and an index, instead of a mask computed from
 values:
 
@@ -136,16 +130,15 @@ print(result.asnumpy())
 
 This is the difference with [`where`](field-operators.md#local-variables-and-conditionals):
 
-- `where(mask, a, b)` is an operation between three fields, so its result is
-  only defined at the points where the mask and **both** branches are defined,
-  even where the mask would not select one of them.
+- `where(mask, a, b)` is an operation between three fields. Its result is only
+  defined at the points which the mask and **both** branches have in common,
+  even at the points where the mask does not select one of them.
 - `concat_where(region, a, b)` takes `a` only inside the region and `b` only
   outside of it, and concatenates the two pieces. A branch does not need to be
   defined outside of its own part of the domain.
 
-Here `smoothed` is only defined at the interior points, the only ones with both
-neighbors. Even so, the operator can be called on the whole grid, because
-`concat_where` only takes `smoothed` inside the region.
+Here `smoothed` is only defined at the interior points, the only ones having
+both neighbors, and still the operator can be called on the whole grid.
 
 ```{important}
 In embedded execution `concat_where` has some restrictions:
@@ -154,9 +147,8 @@ In embedded execution `concat_where` has some restrictions:
   `I < 1`, `K == 0` or `(I > 0) & (I < 5)`. Conditions with `|` or `!=`, or
   involving two dimensions, are not supported. Nest several `concat_where` calls
   instead.
-- A scalar is only accepted as the first branch, and only if its region is
-  bounded on both sides, like `(I > 0) & (I < 5)` or `I == 2`. Otherwise use
-  fields in both branches.
+- A scalar is only accepted as the branch of a region bounded on both sides.
+  Otherwise use fields in both branches.
 ```
 
 ## Unstructured meshes
@@ -173,10 +165,10 @@ align: center
 The mesh, with the indices of the cells (red) and the edges (blue)
 ```
 
-The next cell defines the dimensions, the offsets `E2C` (the cells of every
-edge) and `C2E` (the edges of every cell), and the connectivities that hold the
-tables, as explained in
-[Grids and fields](../python/grids-and-fields.md#unstructured-meshes).
+The following cell defines the mesh, as explained in
+[Grids and fields](../python/grids-and-fields.md#unstructured-meshes): the
+dimensions, the offsets `E2C` (the cells of every edge) and `C2E` (the edges of
+every cell), and the connectivity tables behind them.
 
 ```{code-cell} ipython3
 Cell = gtx.Dimension("Cell")
@@ -248,10 +240,9 @@ Select a neighbor by its index only when **every** location has that neighbor,
 that is, when the connectivity table has no missing entries in that column.
 This is the case of the connectivities with a fixed number of neighbors, like
 the two vertices of an edge. In this mesh every edge has a first cell, so
-`cells(E2C[0])` is fine, but the boundary edges do not have a second one:
-selecting it is an error in embedded execution, and the compiled backends do
-not check it. When the number of neighbors is not the same for all the
-locations, use the reductions explained next.
+`cells(E2C[0])` is fine, but the boundary edges do not have a second one. When
+the number of neighbors is not the same for all the locations, use the
+reductions explained next.
 ```
 
 ### All the neighbors: local dimensions and reductions
@@ -296,9 +287,8 @@ The values of the neighbors can be combined with other fields before reducing.
 For instance, `neighbor_sum(weights * cells(E2C), axis=E2CDim)` is a weighted
 sum, where `weights` is a field with dimensions `Edge, E2CDim`.
 
-A field can have at most one local dimension, so `cells(E2C)(C2E)` is not
-supported: first reduce the local dimension of `cells(E2C)`, then apply the
-next offset.
+A field can only have one local dimension, so `cells(E2C)(C2E)` is not
+supported: reduce the first local dimension before using another offset.
 
 ## Staggered dimensions
 
@@ -308,8 +298,8 @@ change.
 ```
 
 Many discretizations on Cartesian grids place some quantities at the centers of
-the cells and others, like fluxes, at the interfaces between them. Here `I`
-numbers the cells, and its **staggered** counterpart numbers the interfaces:
+the cells and others, like fluxes, at the interfaces between them. Such
+interfaces are described by the **staggered** counterpart of a dimension:
 
 ```{code-cell} ipython3
 IHalf = gtx.flip_staggered(I)
@@ -318,7 +308,7 @@ IHalfField = gtx.Field[gtx.Dims[IHalf], gtx.float64]
 ```
 
 The point `i` of `IHalf` is located half a cell _before_ the point `i` of `I`,
-that is, between the cells `i - 1` and `i`. Offsets of half a cell move from
+that is, between the cells `i - 1` and `i`. Offsets of half a point move from
 one dimension to the other. The dimension written in the offset is the one of
 the **result**:
 
@@ -346,7 +336,6 @@ laplacian(a, out=result, domain={I: (1, 5)})
 print(result.asnumpy())
 ```
 
-Because cells and interfaces use different dimensions, GT4Py reports an error
-when they are mixed by mistake, for example when adding a field over `I` to a
-field over `IHalf`. For the same reason, a field cannot have a dimension and
-its staggered counterpart at the same time.
+Using two different dimensions lets GT4Py check that cell and interface
+quantities are not mixed by mistake. The type of a field in an operator cannot
+have a dimension and its staggered counterpart at the same time.

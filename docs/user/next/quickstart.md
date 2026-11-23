@@ -15,8 +15,9 @@ kernelspec:
 # Quickstart
 
 This page walks through a complete `gt4py.next` computation: a Laplacian on a
-two-dimensional Cartesian grid. It takes a few minutes to read. Every code cell
-is executed when the documentation is built, so the outputs shown are real.
+two-dimensional Cartesian grid. It takes a few minutes to read and every code
+cell is executed when the documentation is built, so what you see is the actual
+output.
 
 ## Installation
 
@@ -26,11 +27,9 @@ GT4Py is a regular Python package:
 pip install gt4py
 ```
 
-GT4Py requires Python 3.12 or later. This is all that is needed to run
-computations in Python. To compile them with the `gtfn_cpu` backend, used later
-on this page, a C++ compiler supporting C++17 must also be available on the
-system. The plot below also needs `matplotlib`, which is not installed with
-GT4Py.
+This is all that is needed to run computations in Python. To compile them with
+the `gtfn_cpu` backend, used at the end of this page, a C++ compiler supporting
+C++17 must also be available on the system.
 
 ## Dimensions
 
@@ -53,8 +52,8 @@ A **field** is an array whose axes are labeled with dimensions. The set of grid
 points where it is defined is its **domain**: a range of indices for each
 dimension.
 
-`gtx.as_field` creates a field by copying the data of an existing array, and
-`gtx.zeros` allocates a new one filled with zeros:
+`gtx.as_field` creates a field from the data of an existing array, and
+`gtx.zeros` allocates a new one:
 
 ```{code-cell} ipython3
 nx, ny = 64, 48
@@ -68,17 +67,17 @@ print(phi.domain)
 ```
 
 The output lists, for each dimension, its kind and its range of indices
-(`start:stop`, with `stop` excluded, so `0:64` means the indices 0 to 63). Here
-`domain` covers all the points of the grid.
+(`start:stop`, with `stop` excluded). Here `domain` covers all the points of
+the grid.
 
 ## A field operator
 
 Computations are written as **field operators**: Python functions decorated with
 `@gtx.field_operator`, which take fields and return fields. There are no loops
-and no indices inside. An expression describes the result at every grid point.
-Neighboring points are reached by calling a field with an offset along a
-dimension, an operation called _premap_. For example, `phi(I + 1)` is the value
-of `phi` at the next point in the `I` direction.
+and no indices inside. An expression describes the result at every grid point,
+and neighboring points are reached by calling a field with an offset along a
+dimension, an operation called _premap_: `phi(I + 1)` is the value of `phi` at
+the next point in the `I` direction.
 
 This is the five-point Laplacian (with unit grid spacing):
 
@@ -91,15 +90,13 @@ def laplacian(phi: IJField) -> IJField:
     return phi(I + 1) + phi(I - 1) + phi(J + 1) + phi(J - 1) - 4.0 * phi
 ```
 
-The type annotations are part of the definition.
-`gtx.Field[gtx.Dims[I, J], gtx.float64]` is a field over the dimensions `I` and
-`J` with 64-bit floating-point values, here the type of both the argument and
-the result.
+The type annotations are part of the definition: they declare the dimensions and
+the data type of the arguments and of the result.
 
 ## Running it
 
 A field operator is called with its arguments plus `out`, the field where the
-result is written. The call returns nothing. The Laplacian needs one
+result is written. The call itself returns nothing. The Laplacian needs one
 neighbor on each side, so it can only be computed in the interior of the grid.
 The `domain` argument selects those points:
 
@@ -109,8 +106,8 @@ interior = {I: (1, nx - 1), J: (1, ny - 1)}
 laplacian(phi, out=lap_phi, domain=interior)
 ```
 
-The points of `lap_phi` outside `interior` have not been touched: they still
-hold zeros. To plot the data, `asnumpy()` returns it as a NumPy array:
+The points of `lap_phi` outside `interior` have not been touched. `asnumpy()`
+returns the data as a NumPy array, for example to plot it.
 
 ```{code-cell} ipython3
 import matplotlib.pyplot as plt
@@ -130,9 +127,9 @@ Python code.
 
 ## Compiling with a backend
 
-A **backend** compiles the same field operator to optimized code.
-`with_backend` returns a new version of the operator bound to a backend. The
-one used here is `gtx.gtfn_cpu`, which generates C++ code using the
+The same field operator can be compiled to optimized code by a **backend**.
+`with_backend` returns a new version of the operator bound to that backend, here
+`gtx.gtfn_cpu`, which generates C++ code using the
 [GridTools library](https://gridtools.github.io/gridtools/latest/index.html).
 The backend can also be passed as `allocator` when creating fields, so that
 they get the memory layout the backend prefers:
@@ -152,20 +149,20 @@ np.allclose(lap_phi_cpu.asnumpy(), lap_phi.asnumpy())
 ```
 
 The first call generates and compiles the code, which takes a few seconds. Later
-calls reuse the compiled code. The definition of the operator and the way it is
-called stay the same.
+calls reuse the compiled version. Neither the definition of the operator nor the
+way it is called changes.
 
 ```{important}
-By default, GT4Py compiles in separate processes. In a script, the code that
-calls a compiled operator must therefore be under `if __name__ == "__main__":`,
-as required by the Python `multiprocessing` module. Notebooks and interactive
-sessions do not need it.
+The compilation runs in separate processes by default. In a script, the code that calls a
+compiled operator must be inside a function called under
+`if __name__ == "__main__":`, as required by the Python `multiprocessing`
+module. Notebooks and interactive sessions do not need it.
 ```
 
 ## Exploring fields in Python
 
 The expressions used inside a field operator also work on fields in plain
-Python, which is useful for exploring and debugging:
+Python, which is handy for exploring and debugging:
 
 ```{code-cell} ipython3
 d_phi = phi(I + 1) - phi
@@ -177,10 +174,10 @@ print(d_phi.asnumpy().max())
 
 - [Grids and fields](python/grids-and-fields.md): dimensions, domains, allocation
   of fields, and connectivities of unstructured meshes.
-- The GT4Py DSL, what can be written inside operators, in four pages:
+- **GT4Py DSL**: what can be written inside operators.
   - [Field operators](dsl/field-operators.md): types, expressions, conditionals and built-in functions.
   - [Premap and neighbors](dsl/premap.md): Cartesian offsets and unstructured meshes.
-  - [Scan operators](dsl/scan-operators.md): computations that advance along the vertical.
+  - [Scan operators](dsl/scan-operators.md): computations which advance along the vertical.
   - [Programs](dsl/programs.md): grouping several operator calls.
 - [Executing GT4Py programs](python/running.md): embedded execution,
   backends and compilation.

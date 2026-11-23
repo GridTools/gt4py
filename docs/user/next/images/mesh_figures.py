@@ -10,7 +10,7 @@
 
 The mesh, its connectivity tables and the values of the fields are the same as
 in the pages using the figures (`python/grids-and-fields.md` and
-`dsl/premap.md`), so the figures show what the code of those pages computes.
+`dsl/shifts.md`), so the figures show what the code of those pages computes.
 
 Run it from the root of the repository after changing anything here:
 
