@@ -381,3 +381,36 @@ def test_torch_compile_premap_with_inductor(device):
         compiled(field, conn).asnumpy(), _premap_and_reduce(field, conn).asnumpy()
     )
     assert len(graphs) == 1
+
+
+def test_torch_compile_traced_scalar_operands(device):
+    import torch
+
+    field = _field(np.arange(3.0), common.domain({D0: 3}), device)
+
+    def compute(f, a, n):
+        return fbuiltins.sqrt(a) * f + fbuiltins.maximum(a, 5.0) + fbuiltins.astype(n, np.float64)
+
+    compiled, graphs = _compile(compute)
+    num_graphs = []
+    for a, n in ((4.0, 2), (9.0, 3)):
+        a_tensor = torch.tensor(a, dtype=torch.float64)
+        n_tensor = torch.tensor(n, dtype=torch.int32)
+        np.testing.assert_allclose(
+            compiled(field, a_tensor, n_tensor).asnumpy(),
+            compute(field, a_tensor, n_tensor).asnumpy(),
+        )
+        num_graphs.append(len(graphs))
+    # another value is no recompile
+    assert num_graphs[1] == num_graphs[0]
+
+
+def test_torch_compile_as_scalar_of_traced_field(device):
+    field = _field(np.arange(3.0), common.domain({D0: 3}), device)
+
+    def element_times_field(f):
+        return f[NamedIndex(D0, 2)].as_scalar() * f
+
+    compiled, _ = _compile(element_times_field)
+
+    np.testing.assert_array_equal(compiled(field).asnumpy(), [0.0, 2.0, 4.0])

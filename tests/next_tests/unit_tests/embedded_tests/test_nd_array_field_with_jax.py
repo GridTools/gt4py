@@ -644,3 +644,69 @@ def test_jax_jit_as_offset_connectivity_through_cond_and_scan():
     np.testing.assert_array_equal(
         jax.jit(via_scan)(field, offsets), [[1.0, 2.0, 2.0, 2.0], [2.0, 4.0, 4.0, 4.0]]
     )
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_traced_scalar_operands():
+    import jax
+
+    field = common._field(jax.numpy.arange(3.0), domain=common.domain({D0: 3}))
+
+    @jax.jit
+    def compute(f, a, n):
+        return fbuiltins.sqrt(a) * f + fbuiltins.maximum(a, 5.0) + fbuiltins.astype(n, np.float64)
+
+    result = compute(field, 4.0, np.int32(2))
+
+    np.testing.assert_allclose(result.asnumpy(), 2.0 * np.arange(3.0) + 7.0)
+    assert compute._cache_size() == 1
+    compute(field, 9.0, np.int32(3))
+    assert compute._cache_size() == 1
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_setitem_traced_scalar():
+    import jax
+
+    field = common._field(jax.numpy.zeros(3), domain=common.domain({D0: 3}))
+
+    @jax.jit
+    def fill(f, a):
+        f[common.domain({D0: (1, 2)})] = a
+        return f
+
+    np.testing.assert_array_equal(fill(field, 7.0).asnumpy(), [0.0, 7.0, 0.0])
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_as_scalar_of_traced_field():
+    import jax
+
+    field = common._field(jax.numpy.arange(3.0), domain=common.domain({D0: 3}))
+
+    result = jax.jit(lambda f: f[NamedIndex(D0, 2)].as_scalar() * 2.0)(field)
+
+    assert float(result) == 4.0
+
+
+@pytest.mark.requires_jax
+def test_jax_jit_scan_operator():
+    import jax
+
+    import gt4py.next as gtx
+
+    K = Dimension("K", kind=DimensionKind.VERTICAL)
+
+    @gtx.scan_operator(axis=K, forward=True, init=0.0)
+    def scaled_cumsum(state: gtx.float64, x: gtx.float64, a: gtx.float64) -> gtx.float64:
+        return state + a * x
+
+    def run(x, a):
+        out = common._field(jax.numpy.zeros(4), domain=common.domain({K: 4}))
+        scaled_cumsum(x, a, out=out, offset_provider={})
+        return out
+
+    x = common._field(jax.numpy.arange(1.0, 5.0), domain=common.domain({K: 4}))
+
+    np.testing.assert_array_equal(jax.jit(run)(x, 2.0).asnumpy(), run(x, 2.0).asnumpy())
+    np.testing.assert_array_equal(jax.jit(run)(x, 2.0).asnumpy(), [2.0, 6.0, 12.0, 20.0])
