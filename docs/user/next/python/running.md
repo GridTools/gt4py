@@ -132,10 +132,15 @@ working on making this simpler.
 A backend translates programs and operators into optimized code. These are the
 backends exported by `gt4py.next`:
 
-| Backend        | Description                                                 |
-| -------------- | ----------------------------------------------------------- |
-| `gtx.gtfn_cpu` | C++ code using the GridTools library, for CPUs              |
-| `gtx.gtfn_gpu` | The same for GPUs (see [Running on GPUs](#running-on-gpus)) |
+| Backend        | Description                                                                                    |
+| -------------- | ---------------------------------------------------------------------------------------------- |
+| `gtx.dace_cpu` | Code generated and optimized with the [DaCe](https://github.com/spcl/dace) framework, for CPUs |
+| `gtx.dace_gpu` | The same for GPUs (see [Running on GPUs](#running-on-gpus))                                    |
+| `gtx.gtfn_cpu` | C++ code using the GridTools library, for CPUs                                                 |
+| `gtx.gtfn_gpu` | The same for GPUs                                                                              |
+
+All of them are used in the same way. The examples of this page use
+`gtx.gtfn_cpu`, and they work with any other backend by replacing its name.
 
 ```{important}
 Compilation jobs run in separate processes by default. In a script, put the code calling
@@ -187,6 +192,22 @@ Compiled programs warn when Python runs with assertions enabled, which is the
 default, because the checks done by GT4Py in every call take some time. For
 production runs, start Python with the `-O` option or set the `PYTHONOPTIMIZE=1`
 environment variable. These warnings are hidden in this page.
+```
+
+The same program with the DaCe backend:
+
+```{code-cell} ipython3
+---
+tags: [remove-stderr]
+---
+diffusion_step_dace = diffusion_step.with_backend(gtx.dace_cpu)
+
+phi_dace = gtx.as_field(domain, phi.asnumpy(), allocator=gtx.dace_cpu)
+new_phi_dace = gtx.zeros(domain, allocator=gtx.dace_cpu)
+
+diffusion_step_dace(phi_dace, 0.1, True, nx, ny, new_phi_dace)
+
+print("same result:", np.allclose(new_phi_dace.asnumpy(), reference.asnumpy()))
 ```
 
 ### The build cache
@@ -318,7 +339,7 @@ which are only known at run time are not as good.
 
 ## Running on GPUs
 
-`gtx.gtfn_gpu` generates code for GPUs. It needs CuPy, installed with one of the
+`gtx.dace_gpu` and `gtx.gtfn_gpu` generate code for GPUs. They need CuPy, installed with one of the
 extras of the package (for example `pip install gt4py[cuda12]`), and the
 compiler toolchain of the GPU vendor on the system. The fields must be on the
 device, which is done by passing the backend as allocator. Nothing else changes:
