@@ -185,20 +185,7 @@ class BuiltInFunction(Generic[_R, _P]):
             ) is not NotImplemented:
                 return op_func
         else:
-            if any(array_ops.is_0d_array(arg) for arg in args):
-                return self._call_with_0d_fields
             return self.function
-
-    def _call_with_0d_fields(self, *args: Any, **kwargs: Any) -> Any:
-        """Call the field implementation with each 0-d array (e.g. a traced scalar) as a 0-d field."""
-        fields = [
-            common._field(arg, domain=common.Domain()) if array_ops.is_0d_array(arg) else arg
-            for arg in args
-        ]
-        result = cast(Callable[..., Any], self)(*fields, **kwargs)
-        if isinstance(result, common.Field) and result.domain.ndim == 0:
-            return result.ndarray
-        return result
 
     def __gt_type__(self) -> ts.FunctionType:
         signature = inspect.signature(self.function)
@@ -299,7 +286,7 @@ def min_over(field: common.Field, /, axis: common.Dimension) -> common.Field:
 def broadcast(
     field: common.Field | core_defs.ScalarT, dims: tuple[common.Dimension, ...], /
 ) -> common.Field:
-    assert core_defs.is_scalar_type(
+    assert array_ops.is_scalar_like(
         field
     )  # default implementation for scalars, Fields are handled via dispatch
     # TODO(havogt) implement with FunctionField, the workaround is to ignore broadcasting on scalars as they broadcast automatically, but we lose the check for compatible dimensions
@@ -335,8 +322,11 @@ def astype(
     if isinstance(value, tuple):
         return tuple(astype(v, type_) for v in value)
     # default implementation for scalars, Fields are handled via dispatch
-    assert core_defs.is_scalar_type(value)
-    return core_defs.dtype(type_).scalar_type(value)
+    assert array_ops.is_scalar_like(value)
+    if core_defs.is_scalar_type(value):
+        return core_defs.dtype(type_).scalar_type(value)
+    ops = array_ops.of(value)
+    return ops.xp.astype(value, ops.dtype(type_))
 
 
 _UNARY_MATH_NUMBER_BUILTIN_IMPL: Final = {"abs": abs, "neg": operator.neg}
@@ -393,11 +383,11 @@ def _make_unary_math_builtin(name: str) -> BuiltInFunction:
 
     def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
         # TODO(havogt): enable tests in `test_math_builtin_execution.py`
-        assert core_defs.is_scalar_type(
-            value
-        )  # default implementation for scalars, Fields are handled via dispatch
-
-        return cast(common.Field | core_defs.ScalarT, _math_builtin(value))
+        # default implementation for scalars, Fields are handled via dispatch
+        assert array_ops.is_scalar_like(value)
+        if core_defs.is_scalar_type(value):
+            return cast(common.Field | core_defs.ScalarT, _math_builtin(value))
+        return array_ops.of(value).elementwise_function(name)(value)
 
     impl.__name__ = name
     return BuiltInFunction(impl)
@@ -438,9 +428,12 @@ def _make_binary_math_builtin(name: str) -> BuiltInFunction:
         lhs: common.Field | core_defs.ScalarT, rhs: common.Field | core_defs.ScalarT, /
     ) -> common.Field | core_defs.ScalarT:
         # default implementation for scalars, Fields are handled via dispatch
-        assert core_defs.is_scalar_type(lhs)
-        assert core_defs.is_scalar_type(rhs)
-        return getattr(np, name)(lhs, rhs)
+        assert array_ops.is_scalar_like(lhs) and array_ops.is_scalar_like(rhs)
+        if core_defs.is_scalar_type(lhs) and core_defs.is_scalar_type(rhs):
+            return getattr(np, name)(lhs, rhs)
+        array = cast(core_defs.NDArrayObject, rhs if core_defs.is_scalar_type(lhs) else lhs)
+        ops = array_ops.of(array)
+        return ops.elementwise_function(name)(ops.operand(lhs, array), ops.operand(rhs, array))
 
     impl.__name__ = name
     return BuiltInFunction(impl)
