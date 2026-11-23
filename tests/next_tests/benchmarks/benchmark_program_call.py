@@ -74,7 +74,7 @@ def benchmark_const_no_args_program(
         const(out=out)
 
     size = 1
-    out_field = gtx.empty([(IDim, size)], dtype=gtx.float64)
+    out_field = gtx.empty([(IDim, size)], dtype=gtx.float64, allocator=backend)
 
     # Initial compilation
     compiled_program = const_no_args.with_backend(backend)
@@ -100,8 +100,8 @@ def benchmark_copy_01_arg_program(
         identity_fop(in_field, out=out)
 
     size = 1
-    in_field = gtx.full([(IDim, size)], 1, dtype=gtx.float64)
-    out_field = gtx.empty([(IDim, size)], dtype=gtx.float64)
+    in_field = gtx.full([(IDim, size)], 1, dtype=gtx.float64, allocator=backend)
+    out_field = gtx.empty([(IDim, size)], dtype=gtx.float64, allocator=backend)
 
     # Initial compilation
     compiled_program = copy_01_arg.with_backend(backend)
@@ -136,8 +136,8 @@ def benchmark_horizontal_copy_01_arg_program(
         )
 
     size = 1
-    input_field = gtx.empty([(Cell, size)], dtype=gtx.float64)
-    out_field = gtx.empty([(Cell, size)], dtype=gtx.float64)
+    input_field = gtx.empty([(Cell, size)], dtype=gtx.float64, allocator=backend)
+    out_field = gtx.empty([(Cell, size)], dtype=gtx.float64, allocator=backend)
 
     # Initial compilation
     compiled_program = horizontal_copy_01_arg_program.with_backend(backend)
@@ -195,8 +195,10 @@ def benchmark_horizontal_copy_05_arg_program(
         )
 
     size = 1
-    input_fields = [gtx.empty([(Cell, size)], dtype=gtx.float64) for _ in range(5)]
-    out_field = gtx.empty([(Cell, size)], dtype=gtx.float64)
+    input_fields = [
+        gtx.empty([(Cell, size)], dtype=gtx.float64, allocator=backend) for _ in range(5)
+    ]
+    out_field = gtx.empty([(Cell, size)], dtype=gtx.float64, allocator=backend)
 
     # Initial compilation
     compiled_program = horizontal_copy_05_arg_program.with_backend(backend)
@@ -314,8 +316,10 @@ def benchmark_horizontal_copy_25_arg_program(
         )
 
     size = 1
-    input_fields = [gtx.empty([(Cell, size)], dtype=gtx.float64) for _ in range(25)]
-    out_field = gtx.empty([(Cell, size)], dtype=gtx.float64)
+    input_fields = [
+        gtx.empty([(Cell, size)], dtype=gtx.float64, allocator=backend) for _ in range(25)
+    ]
+    out_field = gtx.empty([(Cell, size)], dtype=gtx.float64, allocator=backend)
 
     # Initial compilation
     compiled_program = horizontal_copy_25_arg_program.with_backend(backend)
