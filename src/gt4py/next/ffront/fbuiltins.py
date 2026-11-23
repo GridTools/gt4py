@@ -8,8 +8,6 @@
 
 import dataclasses
 import inspect
-import math
-import operator
 from builtins import bool, float, int, tuple  # noqa: A004 shadowing a Python built-in
 from types import UnionType
 from typing import (
@@ -28,7 +26,6 @@ from typing import (
     overload,
 )
 
-import numpy as np
 from numpy import float32, float64, int8, int16, int32, int64, uint8, uint16, uint32, uint64
 
 from gt4py._core import definitions as core_defs
@@ -329,65 +326,39 @@ def astype(
     return ops.xp.astype(value, ops.dtype(type_))
 
 
-_UNARY_MATH_NUMBER_BUILTIN_IMPL: Final = {"abs": abs, "neg": operator.neg}
-UNARY_MATH_NUMBER_BUILTIN_NAMES: Final = [*_UNARY_MATH_NUMBER_BUILTIN_IMPL.keys()]
-
-
-try:
-    from scipy.special import gamma as _gamma  # dtype-preserving ufunc
-except ImportError:
-
-    def _gamma(value: core_defs.ScalarT) -> core_defs.ScalarT:
-        # restore the input scalar type, which `math.gamma` widens to `float`
-        return type(value)(math.gamma(value))
-
-
-_UNARY_MATH_FP_BUILTIN_IMPL: Final = {
-    "sin": np.sin,
-    "cos": np.cos,
-    "tan": np.tan,
-    "arcsin": np.arcsin,
-    "arccos": np.arccos,
-    "arctan": np.arctan,
-    "sinh": np.sinh,
-    "cosh": np.cosh,
-    "tanh": np.tanh,
-    "arcsinh": np.arcsinh,
-    "arccosh": np.arccosh,
-    "arctanh": np.arctanh,
-    "sqrt": np.sqrt,
-    "exp": np.exp,
-    "log": np.log,
-    "gamma": _gamma,
-    "cbrt": np.cbrt,
-    "floor": np.floor,
-    "ceil": np.ceil,
-    "trunc": np.trunc,
-}
-UNARY_MATH_FP_BUILTIN_NAMES: Final = [*_UNARY_MATH_FP_BUILTIN_IMPL.keys()]
-
-_UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL: Final = {
-    "isfinite": np.isfinite,
-    "isinf": np.isinf,
-    "isnan": np.isnan,
-}
-UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES: Final = [*_UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL.keys()]
+UNARY_MATH_NUMBER_BUILTIN_NAMES: Final = ["abs", "neg"]
+UNARY_MATH_FP_BUILTIN_NAMES: Final = [
+    "sin",
+    "cos",
+    "tan",
+    "arcsin",
+    "arccos",
+    "arctan",
+    "sinh",
+    "cosh",
+    "tanh",
+    "arcsinh",
+    "arccosh",
+    "arctanh",
+    "sqrt",
+    "exp",
+    "log",
+    "gamma",
+    "cbrt",
+    "floor",
+    "ceil",
+    "trunc",
+]
+UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES: Final = ["isfinite", "isinf", "isnan"]
 
 
 def _make_unary_math_builtin(name: str) -> BuiltInFunction:
-    _math_builtin = (
-        _UNARY_MATH_NUMBER_BUILTIN_IMPL
-        | _UNARY_MATH_FP_BUILTIN_IMPL
-        | _UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL
-    )[name]
-
     def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
         # TODO(havogt): enable tests in `test_math_builtin_execution.py`
         # default implementation for scalars, Fields are handled via dispatch
         assert array_ops.is_scalar_like(value)
-        if core_defs.is_scalar_type(value):
-            return cast(common.Field | core_defs.ScalarT, _math_builtin(value))
-        return array_ops.of(value).elementwise_function(name)(value)
+        ops = array_ops.default() if core_defs.is_scalar_type(value) else array_ops.of(value)
+        return ops.elementwise_function(name)(value)
 
     impl.__name__ = name
     return BuiltInFunction(impl)
@@ -430,7 +401,7 @@ def _make_binary_math_builtin(name: str) -> BuiltInFunction:
         # default implementation for scalars, Fields are handled via dispatch
         assert array_ops.is_scalar_like(lhs) and array_ops.is_scalar_like(rhs)
         if core_defs.is_scalar_type(lhs) and core_defs.is_scalar_type(rhs):
-            return getattr(np, name)(lhs, rhs)
+            return array_ops.default().elementwise_function(name)(lhs, rhs)
         array = cast(core_defs.NDArrayObject, rhs if core_defs.is_scalar_type(lhs) else lhs)
         ops = array_ops.of(array)
         return ops.elementwise_function(name)(ops.operand(lhs, array), ops.operand(rhs, array))
