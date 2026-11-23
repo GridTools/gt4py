@@ -169,6 +169,50 @@ def test_compile_kwargs(cartesian_case, compile_testee):
     assert np.allclose(kwargs["out"].ndarray, a.ndarray + b.ndarray)
 
 
+def test_compile_without_offset_provider(cartesian_case, compile_testee):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    compile_testee.compile()
+
+    args, kwargs = cases.get_default_data(cartesian_case, compile_testee)
+
+    # make sure the backend is never called
+    object.__setattr__(compile_testee, "backend", _raise_on_compile)
+
+    compile_testee(*args, **kwargs)
+    assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
+
+    kwargs["out"].ndarray[...] = 0
+    compile_testee(*args, offset_provider={}, **kwargs)
+    assert np.allclose(kwargs["out"].ndarray, args[0].ndarray + args[1].ndarray)
+
+
+@pytest.mark.uses_cartesian_shift
+def test_compile_cartesian_shift_without_offset_provider(cartesian_case):
+    if cartesian_case.backend is None:
+        pytest.skip("Embedded compiled program doesn't make sense.")
+
+    @gtx.field_operator
+    def shift_by_one(a: cases.IField) -> cases.IField:
+        return a(cases.IDim + 1)
+
+    @gtx.program(backend=cartesian_case.backend)
+    def testee(a: cases.IField, out: cases.IField):
+        shift_by_one(a, out=out[:-1])
+
+    testee.compile()
+
+    a = cases.allocate(cartesian_case, testee, "a")()
+    out = cases.allocate(cartesian_case, testee, "out").strategy(cases.ConstInitializer(0))()
+
+    # make sure the backend is never called
+    object.__setattr__(testee, "backend", _raise_on_compile)
+
+    testee(a, out)
+    assert np.allclose(out.asnumpy()[:-1], a.asnumpy()[1:])
+
+
 @pytest.mark.uses_scan
 def test_compile_scan(cartesian_case, compile_testee_scan):
     if cases.runs_embedded(cartesian_case):
@@ -257,6 +301,18 @@ def test_compile_unstructured(unstructured_case, compile_testee_unstructured):
         kwargs["out"].asnumpy(),
         np.sum(np.where(v2e_numpy != -1, args[0].asnumpy()[v2e_numpy], 0), axis=1),
     )
+
+
+@pytest.mark.uses_unstructured_shift
+def test_compile_unstructured_without_offset_provider_errors(
+    unstructured_case, compile_testee_unstructured
+):
+    args, kwargs = cases.get_default_data(unstructured_case, compile_testee_unstructured)
+
+    # depending on the compilation runner the error is raised on compile or on the first call
+    with pytest.raises(KeyError, match="'V2E' not found in offset provider"):
+        compile_testee_unstructured.compile()
+        compile_testee_unstructured(*args, **kwargs)
 
 
 # override mesh descriptor to contain only the simple mesh
