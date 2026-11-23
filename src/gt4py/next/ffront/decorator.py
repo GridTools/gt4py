@@ -184,20 +184,18 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
                 static_domains=self.compilation_options.static_domains,
             )
 
-        if self.compilation_options.connectivities is None and offset_provider is None:
-            raise ValueError(
-                "Cannot compile a program without connectivities / OffsetProviderType."
-            )
+        # TODO(havogt): explicitly check that the offset provider contains all connectivities
+        #  required by this program, instead of failing in the (possibly asynchronous)
+        #  compilation.
+        if offset_provider is None:
+            offset_provider = self.compilation_options.connectivities or {}
         if not all(isinstance(v, list) for v in static_args.values()):
             raise TypeError(
                 "Please provide the static arguments as lists."
             )  # To avoid confusion with tuple args
 
-        offset_provider = (
-            self.compilation_options.connectivities if offset_provider is None else offset_provider
-        )
         if not isinstance(offset_provider, list):
-            offset_provider = [offset_provider]  # type: ignore[list-item] # cleanup offset_provider vs offset_provider_type
+            offset_provider = [offset_provider]
 
         assert all(
             common.is_offset_provider(op) or common.is_offset_provider_type(op)
