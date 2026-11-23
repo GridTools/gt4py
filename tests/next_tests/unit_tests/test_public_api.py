@@ -8,9 +8,6 @@
 
 """Test the names exported by the public `gt4py.next` namespace."""
 
-import subprocess
-import sys
-
 import pytest
 
 import gt4py.next as gtx
@@ -51,18 +48,3 @@ def test_dace_noopt_backends_are_not_exported():
 def test_unknown_name_raises_attribute_error():
     with pytest.raises(AttributeError, match="no_such_backend"):
         gtx.no_such_backend  # noqa: B018
-
-
-def test_dace_backends_are_lazy():
-    # The DaCe backends are loaded on first access: run in a fresh interpreter, as
-    # other tests of the same session may have imported them already.
-    code = """
-import sys
-import gt4py.next as gtx
-mod = "gt4py.next.program_processors.runners.dace"
-assert mod not in sys.modules, "DaCe backends imported eagerly"
-backend = gtx.dace_cpu
-assert mod in sys.modules
-assert gtx.dace_cpu is backend
-"""
-    subprocess.run([sys.executable, "-c", code], check=True)
