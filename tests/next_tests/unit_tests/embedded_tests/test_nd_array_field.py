@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+# Tests specific to one array library go in a separate file, e.g. `test_nd_array_field_with_jax.py`.
+
 import dataclasses
 import math
 import operator
