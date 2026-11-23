@@ -642,6 +642,17 @@ def test_default_runner_made_while_a_child_imports_main_is_not_kept(monkeypatch)
         runners.reset_default_runner()
 
 
+def test_default_thread_runner_made_while_a_child_imports_main_is_kept(monkeypatch):
+    """Only process runners are discarded: other runners must not pile up."""
+    monkeypatch.setattr(config, "BUILD_JOBS_MODE", config.BuildJobsMode.THREAD)
+    runners.reset_default_runner()
+    try:
+        with mock.patch.object(multiprocessing.current_process(), "_inheriting", True, create=True):
+            assert runners.get_default_runner() is runners.get_default_runner()
+    finally:
+        runners.reset_default_runner()
+
+
 def test_process_runner_submit_hints_at_broken_pool(process_runner):
     broken_pool = mock.Mock(submit=mock.Mock(side_effect=BrokenProcessPool("boom")))
     with mock.patch.object(process_runner, "_pool", broken_pool):

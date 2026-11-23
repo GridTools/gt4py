@@ -333,9 +333,9 @@ def get_default_runner() -> Runner:
             return _default_runner
         runner = SerialRunner() if _is_worker_process() else from_config()
         # A child process importing `__main__` is not flagged as a worker yet: do not
-        # keep the runner made for that phase (its `submit` refuses to start anyway),
-        # so that the child gets a serial one once it is set up.
-        if not _is_importing_main_module_in_child_process():
+        # keep a process runner made for that phase (its `submit` refuses to start
+        # anyway), so that the child gets a serial one once it is set up.
+        if not (isinstance(runner, ProcessRunner) and _is_importing_main_module_in_child_process()):
             _default_runner = runner
         return runner
 
