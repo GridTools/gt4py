@@ -587,10 +587,7 @@ class CollapseTuple(
         for param, arg in zip(stencil.params, node.args, strict=True):
             if isinstance(arg.type, ts.TupleType):
                 assert isinstance(param.type, it_ts.IteratorType)
-                ref_to_remapped_arg = im.ref(
-                    f"__ct_flat_remapped_{len(remapped_args)}",
-                    arg.type,
-                )
+                ref_to_remapped_arg = im.ref(next(self.uids["__ct_flat_remapped"]), arg.type)
                 self._preserve_annex(arg, ref_to_remapped_arg)
                 remapped_args[im.sym(ref_to_remapped_arg.id, arg.type)] = arg
                 new_params_inner, lift_params = [], []
