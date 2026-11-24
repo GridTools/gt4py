@@ -19,15 +19,19 @@ from gt4py.next import fingerprinting
 from gt4py.next.otf import arguments, artifacts, stages
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
-from gt4py.next.type_system import type_translation
+from gt4py.next.type_system import type_specifications as ts, type_translation
 from gt4py.next import custom_layout_allocators as next_allocators
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case, cartesian_case_no_backend
 from next_tests.integration_tests.cases_utils import (
+    IDim,
     KDim,
     exec_alloc_descriptor,
 )
+
+
+IKFloatField = gtx.Field[gtx.Dims[IDim, KDim], gtx.float64]
 
 
 @pytest.fixture
@@ -157,3 +161,148 @@ def test_gtfn_file_cache(program_example):
         bare_gtfn_translation_step(compilable_program)
         == cached_gtfn_translation_step.cache[cache_key]
     )
+
+
+def _program_with_materialized_local():
+    @gtx.field_operator
+    def multiply_add(a: IKFloatField, b: IKFloatField) -> IKFloatField:
+        return a * b + 1.0
+
+    @gtx.field_operator
+    def testee_op(a: IKFloatField, b: IKFloatField) -> IKFloatField:
+        tmp = multiply_add(a, b)
+        tmp = multiply_add(tmp, b)
+        # the vertical shifts force `tmp` to be materialized, so its name survives lowering
+        return tmp(KDim - 1) + tmp + tmp(KDim + 1)
+
+    @gtx.program
+    def testee(a: IKFloatField, b: IKFloatField, out: IKFloatField):
+        testee_op(a, b, out=out, domain={IDim: (0, 4), KDim: (1, 3)})
+
+    return testee, ("field", "field", "field")
+
+
+def _program_with_scan_local():
+    @gtx.scan_operator(axis=KDim, forward=True, init=0.0)
+    def testee_scan(state: float, a: float) -> float:
+        tmp = state + a
+        return tmp * tmp
+
+    @gtx.program
+    def testee(a: IKFloatField, out: IKFloatField):
+        testee_scan(a, out=out)
+
+    return testee, ("field", "field")
+
+
+def _program_with_if_stmt():
+    @gtx.field_operator
+    def testee_op(a: IKFloatField, condition: bool) -> IKFloatField:
+        if condition:
+            tmp = a + 1.0
+        else:
+            tmp = a * 2.0
+        return tmp(KDim + 1) + tmp
+
+    @gtx.program
+    def testee(a: IKFloatField, condition: bool, out: IKFloatField):
+        testee_op(a, condition, out=out, domain={IDim: (0, 4), KDim: (0, 3)})
+
+    return testee, ("field", True, "field")
+
+
+@pytest.mark.parametrize(
+    "make_testee",
+    [_program_with_materialized_local, _program_with_scan_local, _program_with_if_stmt],
+    ids=["materialized_local", "scan_local", "if_stmt"],
+)
+def test_generated_source_is_ascii(make_testee):
+    """
+    Generated code must not contain the non-ASCII names of the frontend's SSA pass.
+
+    The SSA pass renames `tmp` to e.g. `tmp\u141e0`. Compilers without support for
+    extended identifiers (e.g. GCC < 10) reject such a name in C++ source.
+    """
+    testee, arg_kinds = make_testee()
+    field = gtx.as_field([IDim, KDim], np.zeros((4, 4)))
+    args = [field if kind == "field" else kind for kind in arg_kinds]
+
+    module = gtfn_module.translate_program_cpu(
+        stages.CompilableProgramDef(
+            data=testee.gtir,
+            args=arguments.CompileTimeArgs.from_concrete(
+                *args, offset_provider={}, column_axis=KDim
+            ),
+        )
+    )
+
+    non_ascii_lines = [line for line in module.source_code.splitlines() if not line.isascii()]
+    assert not non_ascii_lines
+
+
+def test_replace_invalid_symbols():
+    field_type = ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=ts.ScalarKind.FLOAT64))
+    domain = im.domain(gtx.GridType.CARTESIAN, {IDim: (0, 10)})
+
+    def make_program(lambda_params: tuple[str, str]) -> itir.Program:
+        return itir.Program(
+            id="testee",
+            function_definitions=[],
+            params=[im.sym("inp", field_type), im.sym("out", field_type)],
+            declarations=[],
+            body=[
+                itir.SetAt(
+                    expr=im.as_fieldop(
+                        im.lambda_(*lambda_params)(
+                            im.plus(im.deref(lambda_params[0]), im.deref(lambda_params[1]))
+                        ),
+                        domain,
+                    )("inp", "inp"),
+                    domain=domain,
+                    target=im.ref("out"),
+                )
+            ],
+        )
+
+    # `tmp_0` is taken, so the C++ compatible spelling of `tmp\u141e0` has to be made unique
+    testee = make_program(("tmp\u141e0", "tmp_0"))
+    expected = make_program(("tmp_0_", "tmp_0"))
+
+    assert gtfn_module.replace_invalid_symbols(testee) == expected
+
+
+def test_replace_invalid_symbols_no_change():
+    testee = itir.Program(
+        id="testee",
+        function_definitions=[],
+        params=[im.sym("inp"), im.sym("out")],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.ref("inp"),
+                domain=im.domain(gtx.GridType.CARTESIAN, {IDim: (0, 10)}),
+                target=im.ref("out"),
+            )
+        ],
+    )
+
+    assert gtfn_module.replace_invalid_symbols(testee) is testee
+
+
+def test_replace_invalid_symbols_keeps_params():
+    # program parameters also name the parameters of the generated entry point
+    testee = itir.Program(
+        id="testee",
+        function_definitions=[],
+        params=[im.sym("inp\u03b1"), im.sym("out")],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.ref("inp\u03b1"),
+                domain=im.domain(gtx.GridType.CARTESIAN, {IDim: (0, 10)}),
+                target=im.ref("out"),
+            )
+        ],
+    )
+
+    assert gtfn_module.replace_invalid_symbols(testee) is testee
