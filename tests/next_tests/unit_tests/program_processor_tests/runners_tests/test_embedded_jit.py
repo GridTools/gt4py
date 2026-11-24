@@ -301,6 +301,34 @@ def test_missing_out_is_rejected(device, backend):
         )
 
 
+def test_backend_allocates_arrays_of_its_library(library, backend):
+    field = gtx.zeros(gtx.domain({IDim: 3}), allocator=backend)
+
+    if library == "jax":
+        import jax
+
+        assert isinstance(field.ndarray, jax.Array)
+    else:
+        import torch
+
+        assert isinstance(field.ndarray, torch.Tensor)
+
+
+@pytest.mark.requires_torch
+@pytest.mark.requires_gpu
+def test_torch_compile_allocates_on_the_given_device():
+    from gt4py._core import definitions as core_defs
+    from gt4py.next.program_processors.runners.experimental import torch_compile
+
+    field = gtx.zeros(
+        gtx.domain({IDim: 3}),
+        allocator=torch_compile.torch_compile,
+        device=core_defs.Device(core_defs.DeviceType.CUDA, 0),
+    )
+
+    assert field.ndarray.is_cuda
+
+
 def test_exported_from_experimental(library, backend):
     from gt4py.next import experimental
 
