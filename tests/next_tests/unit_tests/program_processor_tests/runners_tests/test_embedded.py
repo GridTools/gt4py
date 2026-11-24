@@ -358,6 +358,7 @@ def test_jax_backends_allocate_and_run_on_the_given_device():
         pytest.param("cupy", marks=pytest.mark.requires_gpu),
         pytest.param("jax", marks=pytest.mark.requires_jax),
         pytest.param("torch", marks=pytest.mark.requires_torch),
+        pytest.param("mlx", marks=pytest.mark.requires_mlx),
     ]
 )
 def eager_backend(request):
@@ -392,6 +393,7 @@ def test_eager_backend_runs_field_operators(eager_backend):
     params=[
         pytest.param("embedded_jax", marks=pytest.mark.requires_jax),
         pytest.param("embedded_torch", marks=pytest.mark.requires_torch),
+        pytest.param("embedded_mlx", marks=pytest.mark.requires_mlx),
         pytest.param("jax_jit", marks=pytest.mark.requires_jax),
         pytest.param("torch_compile", marks=pytest.mark.requires_torch),
     ]
@@ -479,6 +481,7 @@ def test_missing_optional_package_is_reported(monkeypatch):
         pytest.param("embedded_cupy", marks=pytest.mark.requires_gpu),
         pytest.param("embedded_jax", marks=pytest.mark.requires_jax),
         pytest.param("embedded_torch", marks=pytest.mark.requires_torch),
+        pytest.param("embedded_mlx", marks=pytest.mark.requires_mlx),
         pytest.param("jax_jit", marks=pytest.mark.requires_jax),
         pytest.param("torch_compile", marks=pytest.mark.requires_torch),
     ],

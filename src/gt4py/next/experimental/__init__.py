@@ -23,6 +23,7 @@ _EAGER_BACKENDS: Final = {
     "embedded_cupy": "cupy",
     "embedded_jax": "jax.numpy",
     "embedded_torch": "torch",
+    "embedded_mlx": "mlx.core",
 }
 #: The embedded jit backends, and the optional package each needs
 _JIT_BACKENDS: Final = {"jax_jit": "jax", "torch_compile": "torch"}

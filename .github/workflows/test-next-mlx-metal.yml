@@ -1,0 +1,59 @@
+name: "Test MLX on Apple silicon (Metal)"
+
+# macOS minutes are 10x more expensive: only run when MLX-relevant paths change.
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/test-next-mlx-metal.yml"
+      - "src/gt4py/next/embedded/**"
+      - "src/gt4py/_core/**"
+      - "src/gt4py/next/constructors.py"
+      - "tests/next_tests/**"
+      - "tests/core_tests/**"
+      - "pyproject.toml"
+      - "uv.lock"
+      - "noxfile.py"
+  workflow_dispatch:
+
+concurrency:
+  group: test-next-mlx-metal-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test-mlx-metal:
+    runs-on: macos-latest
+    env:
+      # Paravirtualized Metal device of hosted runners (as in the MLX own CI)
+      METAL_DEVICE_WRAPPER_TYPE: "1"
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv and set the python version
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+          python-version: "3.12"
+
+      # No OpenMP setup needed (see 'daily-ci.yml'): only embedded tests run
+      # here, nothing compiles gtfn or dace code.
+      - name: Show MLX device information
+        run: |
+          uv run --extra mlx python -c "
+          import mlx.core as mx
+          print('default_device:', mx.default_device())
+          print('metal available:', mx.metal.is_available())
+          print('device_info:', mx.device_info())
+          "
+
+      # Direct pytest instead of nox: the nox sessions fix the `-m` expression and
+      # do not run 'tests/core_tests'. `--require-optional-deps` makes a missing
+      # Metal device a failure instead of a silent skip.
+      - name: Run MLX tests
+        run: |
+          uv run --extra standard --extra testing --extra mlx --group test \
+            pytest -sv --require-optional-deps \
+            -m "requires_mlx or requires_mlx_metal" \
+            tests/next_tests tests/core_tests

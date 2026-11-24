@@ -12,7 +12,6 @@ import operator
 import pickle
 from typing import Callable, Iterable, Optional
 
-import array_api_compat
 import array_api_strict
 import numpy as np
 import pytest
@@ -44,6 +43,7 @@ from next_tests.unit_tests.conftest import (
     asarray,
     is_array_api_strict,
     is_cupy,
+    is_mlx,
     is_torch,
     strict_array_on_device1,
 )
@@ -125,6 +125,11 @@ def test_nd_array_field_buffer_info(nd_array_implementation):
     data = asarray(nd_array_implementation, [[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
     field = common._field(data, domain=common.domain({D0: 2, D1: 2}))
     assert field.array_ns is nd_array_implementation
+    if is_mlx(nd_array_implementation):
+        # fields of MLX arrays run only embedded, the buffer info is for compiled backends
+        with pytest.raises(NotImplementedError, match="buffer info"):
+            field.__gt_buffer_info__
+        return
 
     field_ndarray = field.ndarray
     buffer_info = field.__gt_buffer_info__
@@ -144,6 +149,9 @@ def test_nd_array_field_buffer_info(nd_array_implementation):
 
 
 def test_nd_array_field_buffer_info_refreshed_on_buffer_replacement(nd_array_implementation):
+    if is_mlx(nd_array_implementation):
+        pytest.skip("Fields of MLX arrays have no buffer info.")
+
     def make_field():
         data = asarray(nd_array_implementation, [[1.0, 2.0], [3.0, 4.0]], dtype=np.float64)
         return common._field(data, domain=common.domain({D0: 2, D1: 2}))
@@ -999,13 +1007,13 @@ def _gather_case(xp, field_dims, conn_dims, codomain, table, skip_value=None):
     rng = np.random.default_rng(42)
     data = rng.random(tuple(len(r) for _, r in field_dims))
     field = common._field(
-        xp.asarray(data),
+        asarray(xp, data, dtype=data.dtype),
         domain=common.Domain(
             dims=tuple(d for d, _ in field_dims), ranges=tuple(r for _, r in field_dims)
         ),
     )
     conn = common._connectivity(
-        xp.asarray(table),
+        asarray(xp, table, dtype=table.dtype),
         domain=common.Domain(
             dims=tuple(d for d, _ in conn_dims), ranges=tuple(r for _, r in conn_dims)
         ),
@@ -2247,6 +2255,10 @@ def test_nd_array_connectivity_field_buffer_info(nd_array_implementation):
         codomain=V,
     )
     assert e2v_conn.array_ns is nd_array_implementation
+    if is_mlx(nd_array_implementation):
+        with pytest.raises(NotImplementedError, match="buffer info"):
+            e2v_conn.__gt_buffer_info__
+        return
 
     buffer_info = e2v_conn.__gt_buffer_info__
     assert buffer_info == array_ops.of(e2v_conn.ndarray).buffer_info(e2v_conn.ndarray)
@@ -2743,10 +2755,9 @@ def test_scan_result_in_namespace_and_on_device_of_inputs(nd_array_implementatio
 
     result = _scan_cumsum(common._field(data, domain=common.domain({K: 4})), K)
 
-    assert array_api_compat.array_namespace(result.ndarray) is array_api_compat.array_namespace(
-        data
-    )
-    assert array_api_compat.device(result.ndarray) == array_api_compat.device(data)
+    ops = array_ops.of(data)
+    assert array_ops.of(result.ndarray) is ops
+    assert ops.device(result.ndarray) == ops.device(data)
     np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0, 3.0, 4.0])
 
 

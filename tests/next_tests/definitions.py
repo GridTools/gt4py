@@ -74,6 +74,7 @@ cupy_execution = EmbeddedDummyBackend("EmbeddedCuPy", _optional_module("cupy"))
 jax_numpy_execution = EmbeddedDummyBackend("EmbeddedJaxNumPy", _optional_module("jax.numpy"))
 array_api_strict_execution = EmbeddedDummyBackend("EmbeddedArrayAPIStrict", array_api_strict)
 torch_execution = EmbeddedDummyBackend("EmbeddedTorch", _optional_module("torch"))
+mlx_execution = EmbeddedDummyBackend("EmbeddedMLX", _optional_module("mlx.core"))
 
 
 class _TorchCUDAAllocator:
@@ -121,6 +122,7 @@ class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
     ARRAY_API_STRICT_EXECUTION = "next_tests.definitions.array_api_strict_execution"
     TORCH_EXECUTION = "next_tests.definitions.torch_execution"
     TORCH_CUDA_EXECUTION = "next_tests.definitions.torch_cuda_execution"
+    MLX_EXECUTION = "next_tests.definitions.mlx_execution"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
@@ -273,6 +275,13 @@ EMBEDDED_SKIP_LIST = [
 JAX_EMBEDDED_SKIP_LIST = EMBEDDED_SKIP_LIST + [
     (USES_PROGRAM_WITH_SLICED_OUT_ARGUMENTS, XFAIL, UNSUPPORTED_MESSAGE),
 ]
+MLX_EMBEDDED_SKIP_LIST = EMBEDDED_SKIP_LIST + [
+    # slices of MLX arrays are copies: a program cannot write through a slice of a field
+    (USES_PROGRAM_WITH_SLICED_OUT_ARGUMENTS, XFAIL, UNSUPPORTED_MESSAGE),
+    # MLX has no gamma function; this also excludes `cbrt` (`test_roots`), which works and is
+    # tested in `test_nd_array_field_with_mlx.py`
+    (USES_MATH_OUTSIDE_ARRAY_API, XFAIL, UNSUPPORTED_MESSAGE),
+]
 #: under a tracing compiler, scalar arguments are traced unless they are in `static_params`
 TRACED_SCALARS_SKIP_LIST = [
     (USES_SCALAR_IN_CONTROL_FLOW, XFAIL, UNSUPPORTED_MESSAGE),
@@ -329,6 +338,7 @@ BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.ARRAY_API_STRICT_EXECUTION: ARRAY_API_STRICT_EMBEDDED_SKIP_LIST,
     EmbeddedIds.TORCH_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.TORCH_CUDA_EXECUTION: EMBEDDED_SKIP_LIST,
+    EmbeddedIds.MLX_EXECUTION: MLX_EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,

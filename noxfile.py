@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import os
 import pathlib
+import platform
 import shutil
 import sys
 import tomllib
@@ -73,6 +74,12 @@ PYTHON_VERSIONS: Final[list[str]] = [
 REQUIRES_PYTHON = tomllib.loads((REPO_ROOT / "pyproject.toml").read_text())["project"][
     "requires-python"
 ]
+
+# Opt-in for tests needing a usable Metal (Apple GPU) device for MLX. They are
+# deselected (`not requires_mlx_metal`) unless this variable is set to a truthy value
+# in the environment of a `test_next` run, e.g. on an Apple-silicon Mac:
+#   GT4PY_TEST_MLX_METAL=1 ./noxfile.py -s "test_next-3.12(internal, cpu, nomesh)"
+MLX_METAL_ENV_VAR: Final = "GT4PY_TEST_MLX_METAL"
 
 # -- Parameter sets --
 DeviceOption: TypeAlias = Literal["cpu", "cuda12", "cuda13", "rocm6", "rocm7"]
@@ -149,6 +156,14 @@ def _session_runs_torch(session: nox.Session, device: DeviceOption) -> bool:
         # `OMP: Error #15`
         return False
     return True
+
+
+def _session_runs_mlx(session: nox.Session, device: DeviceOption) -> bool:
+    # MLX runs on CPU (Linux, macOS) or Metal (macOS); the `mlx` extra only resolves
+    # on Linux and Apple-silicon macOS
+    if device != "cpu":
+        return False
+    return sys.platform == "linux" or (sys.platform == "darwin" and platform.machine() == "arm64")
 
 
 # -- Sessions --
@@ -339,10 +354,22 @@ def test_next(
     else:
         torch_markers.append("not requires_torch")
 
+    mlx_markers: list[str] = []
+    if codegen == "internal" and _session_runs_mlx(session, device):
+        extras.append("mlx")
+        if os.environ.get(MLX_METAL_ENV_VAR, "").strip().lower() not in ("1", "true", "yes", "on"):
+            mlx_markers.append("not requires_mlx_metal")
+    else:
+        mlx_markers.extend(["not requires_mlx", "not requires_mlx_metal"])
+
     install_session_venv(session, extras=extras, groups=groups)
 
     markers = " and ".join(
-        codegen_settings["markers"] + device_settings["markers"] + mesh_markers + torch_markers
+        codegen_settings["markers"]
+        + device_settings["markers"]
+        + mesh_markers
+        + torch_markers
+        + mlx_markers
     )
 
     session.run(
@@ -495,7 +522,12 @@ def test_next_dace_determinism(
     # The `scripts` group provides `typer`, needed by the dace-determinism CLI.
     install_session_venv(session, extras=extras, groups=[*groups, "scripts"])
 
-    markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
+    markers = " and ".join(
+        codegen_settings["markers"]
+        + device_settings["markers"]
+        + mesh_markers
+        + ["not requires_mlx", "not requires_mlx_metal"]
+    )
 
     # Execute the determinism script with the session venv's own python (resolved
     # by nox from "python"); the script runs the pytest selection twice via

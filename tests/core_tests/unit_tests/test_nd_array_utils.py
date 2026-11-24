@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import importlib
+import types
 from typing import Any
 
 import numpy as np
@@ -107,6 +108,111 @@ def test_is_array_namespace_jax():
     import jax.numpy as jnp
 
     assert ndarray_utils.is_array_namespace(jnp)
+
+
+@pytest.mark.requires_mlx
+def test_is_array_namespace_mlx():
+    import mlx.core as mx
+
+    assert ndarray_utils.is_array_namespace(mx)
+
+
+@pytest.fixture
+def mlx_gpu_default(monkeypatch):
+    """MLX as on Apple silicon, whose default device is the GPU, without computing on it."""
+    import mlx.core as mx
+
+    monkeypatch.setattr(mx, "default_device", lambda: mx.Device(mx.gpu))
+    monkeypatch.setattr(mx.metal, "is_available", lambda: True)
+    if getattr(mx, "cuda", None) is not None:  # may be missing on macOS
+        monkeypatch.setattr(mx.cuda, "is_available", lambda: False)
+    return mx
+
+
+@pytest.mark.requires_mlx
+@pytest.mark.parametrize("gt4py_device", [None, definitions.Device(definitions.DeviceType.CPU, 0)])
+def test_get_device_translator_mlx_cpu(gt4py_device):
+    import mlx.core as mx
+
+    translator = ndarray_utils.get_device_translator(mx)
+    expected = None if gt4py_device is None else mx.cpu
+    assert translator(gt4py_device) == expected
+
+
+@pytest.mark.requires_mlx
+def test_get_device_translator_mlx_gpu(mlx_gpu_default):
+    mx = mlx_gpu_default
+    translator = ndarray_utils.get_device_translator(mx)
+
+    assert translator(definitions.Device(definitions.DeviceType.METAL, 0)) == mx.gpu
+    assert translator(None) is None
+    # only the default device
+    with pytest.raises(ValueError, match="set_default_device"):
+        translator(definitions.Device(definitions.DeviceType.CPU, 0))
+
+
+@pytest.mark.requires_mlx
+def test_get_device_translator_mlx_cuda_build(mlx_gpu_default, monkeypatch):
+    mx = mlx_gpu_default
+    monkeypatch.setattr(mx.metal, "is_available", lambda: False)
+    monkeypatch.setattr(mx, "cuda", types.SimpleNamespace(is_available=lambda: True), raising=False)
+    translator = ndarray_utils.get_device_translator(mx)
+
+    assert translator(definitions.Device(definitions.DeviceType.CUDA, 0)) == mx.gpu
+    with pytest.raises(ValueError, match="does not support"):
+        translator(definitions.Device(definitions.DeviceType.METAL, 0))
+
+
+@pytest.mark.requires_mlx
+@pytest.mark.parametrize(
+    "gt4py_device",
+    [
+        definitions.Device(definitions.DeviceType.ROCM, 0),
+        definitions.Device(definitions.DeviceType.CPU, 1),
+    ],
+)
+def test_get_device_translator_mlx_rejects(gt4py_device):
+    import mlx.core as mx
+
+    with pytest.raises(ValueError):
+        ndarray_utils.get_device_translator(mx)(gt4py_device)
+
+
+@pytest.mark.requires_mlx
+def test_get_device_translator_mlx_rejects_unavailable_gpu(monkeypatch):
+    import mlx.core as mx
+
+    monkeypatch.setattr(mx.metal, "is_available", lambda: False)
+    monkeypatch.setattr(
+        mx, "cuda", types.SimpleNamespace(is_available=lambda: False), raising=False
+    )
+    translator = ndarray_utils.get_device_translator(mx)
+    for device_type in (definitions.DeviceType.METAL, definitions.DeviceType.CUDA):
+        with pytest.raises(ValueError, match="does not support"):
+            translator(definitions.Device(device_type, 0))
+
+
+@pytest.mark.requires_mlx
+@pytest.mark.parametrize(
+    "scalar_type", [np.bool_, np.int32, np.int64, np.uint8, np.float32, np.float64]
+)
+def test_dtype_translation_mlx(scalar_type):
+    # MLX names the boolean dtype only `bool_`
+    import mlx.core as mx
+
+    name = "bool_" if scalar_type is np.bool_ else np.dtype(scalar_type).name
+    array = mx.zeros((2,), dtype=getattr(mx, name))
+
+    assert ndarray_utils.namespace_dtype(mx, scalar_type) == getattr(mx, name)
+    assert ndarray_utils.scalar_type(mx, getattr(mx, name)) is scalar_type
+    assert ndarray_utils.dtype_of(array) == definitions.dtype(scalar_type)
+
+
+def test_metal_device_type_is_dlpack():
+    assert definitions.DeviceType.METAL == dlpack.DeviceType.METAL == 8
+    assert ndarray_utils.device_from_dlpack(8, 0) == definitions.Device(
+        definitions.DeviceType.METAL, 0
+    )
 
 
 @pytest.mark.parametrize("array_ns_name", ["numpy", "array_api_strict"])

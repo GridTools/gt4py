@@ -115,6 +115,9 @@ no_backend = NoBackend(
             ),
         ),
         pytest.param(
+            next_tests.definitions.EmbeddedIds.MLX_EXECUTION, marks=pytest.mark.requires_mlx
+        ),
+        pytest.param(
             next_tests.definitions.OptionalProgramBackendId.JAX_JIT,
             marks=pytest.mark.requires_jax,
         ),
