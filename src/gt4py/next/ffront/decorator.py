@@ -363,8 +363,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                     *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
                 )
             else:
-                # Embedded execution (no backend): the documented default for development
-                # and debugging, so it is deliberately silent.
+                # Embedded execution.
                 with next_embedded.context.update(offset_provider=offset_provider):
                     with embedded_program_call_context(self, args, offset_provider, kwargs):
                         self.definition_stage.definition(*args, **kwargs)
