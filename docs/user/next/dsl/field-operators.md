@@ -272,19 +272,22 @@ both of them.
 ## Values from the enclosing scope
 
 Operators can refer to objects defined outside them: dimensions, other
-operators and constants. Scalar constants are grouped in a `FrozenNamespace`, an
-immutable collection of named values. For now it is not exported by
-`gt4py.next` and it has to be imported from `gt4py.eve.utils`:
+operators and constants. Scalar constants are grouped in an `Enum` class whose
+members also subclass a numeric type, so they behave like plain numbers in
+arithmetic:
 
 ```{code-cell} ipython3
-from gt4py.eve.utils import FrozenNamespace
+import enum
 
-constants = FrozenNamespace(gravity=9.80665, earth_radius=6.371e6)
+
+class Constants(np.float64, enum.Enum):
+    GRAVITY = 9.80665
+    EARTH_RADIUS = 6.371e6
 
 
 @gtx.field_operator
 def geopotential(height: IJField) -> IJField:
-    return constants.gravity * height
+    return Constants.GRAVITY * height
 
 
 geopotential(a, out=result)
