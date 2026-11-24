@@ -9,6 +9,7 @@
 # TODO(tehrengruber): All field operators and programs should be executable
 #  as is at some point. Adopt tests to also run on the regular python objects.
 import re
+import warnings
 
 import numpy as np
 import pytest
@@ -85,6 +86,30 @@ def test_copy_execution(cartesian_case, copy_program_def):
     copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
 
     cases.verify_with_default_data(cartesian_case, copy_program, ref=lambda in_field: in_field)
+
+
+def test_embedded_program_call_is_silent():
+    """Embedded execution is the default (no backend): calling it must not warn."""
+    dim = gtx.Dimension("EmbeddedSilentDim")
+
+    @gtx.field_operator
+    def add_one(a: gtx.Field[gtx.Dims[dim], gtx.float64]) -> gtx.Field[gtx.Dims[dim], gtx.float64]:
+        return a + 1.0
+
+    @gtx.program
+    def prog(a: gtx.Field[gtx.Dims[dim], gtx.float64], out: gtx.Field[gtx.Dims[dim], gtx.float64]):
+        add_one(a, out=out)
+
+    assert prog.backend is None
+    a = gtx.as_field([dim], np.arange(3.0))
+    out = gtx.zeros({dim: 3})
+
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        prog(a, out, offset_provider={})
+
+    assert not [w for w in caught if "Using Python execution" in str(w.message)]
+    np.testing.assert_array_equal(out.asnumpy(), np.arange(3.0) + 1.0)
 
 
 def test_double_copy_execution(cartesian_case, double_copy_program_def):

@@ -238,6 +238,10 @@ class ProcessRunner:
             future.set_exception(error)
             return future
 
+        # TODO(egparedes): a script calling a program at module level without an
+        #   `if __name__ == "__main__":` guard breaks the pool with an unhelpful
+        #   `BrokenProcessPool` (the spawned workers re-import `__main__`).
+        #   See https://github.com/GridTools/gt4py/issues/3036.
         return self._pool.submit(
             _run_compilation_task_in_worker,
             executor_blob=executor_blob,

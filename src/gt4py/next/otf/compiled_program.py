@@ -24,7 +24,7 @@ from typing import Any, Generic, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
 from gt4py.eve import utils as eve_utils, xtyping
-from gt4py.next import backend as gtx_backend, common, errors, utils as gtx_utils
+from gt4py.next import backend as gtx_backend, common, config, errors, utils as gtx_utils
 from gt4py.next.ffront import (
     stages as ffront_stages,
     type_info as ffront_type_info,
@@ -114,7 +114,7 @@ def compile_variant_hook(
             },
         )
 
-    if __debug__:
+    if __debug__ and config.WARN_PYTHON_DEBUG_MODE:
         # Note: We set the stack level to point to something internally as we don't want to show this warning for every program call.
         # It's an ad-hoc pragmatic choice that could be revisited in the future.
         warnings.warn(

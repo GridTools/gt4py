@@ -11,6 +11,7 @@ import concurrent.futures
 import contextvars
 import gc
 import traceback
+import warnings
 import weakref
 
 import numpy as np
@@ -23,7 +24,7 @@ from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py._core import definitions as core_defs
 from gt4py.next.otf import arguments, compilation_tasks, compiled_program, runners, workflow
-from gt4py.next import fingerprinting
+from gt4py.next import config, fingerprinting
 from gt4py.next.type_system import type_specifications as ts
 from gt4py.next.iterator import ir as itir
 from gt4py.next.program_processors.runners import gtfn
@@ -534,6 +535,31 @@ def test_dispatch_miss_without_jit_names_static_domain(testee_prog, noop_runner)
 
     with pytest.raises(RuntimeError, match=r"'prog': \(out\)\.domain=Domain"):
         testee(cond=True, out=gtx.zeros(domain={TDim: 2}, dtype=bool), offset_provider={})
+
+
+def _compile_and_collect_warnings(testee_prog) -> list[warnings.WarningMessage]:
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        testee_prog(cond=True, out=gtx.zeros(domain={TDim: 1}, dtype=bool), offset_provider={})
+    return caught
+
+
+def test_no_python_debug_mode_warning_when_disabled(testee_prog, noop_runner, monkeypatch):
+    """Running without `python -O` is the norm in notebooks and tests: no warning unless asked for."""
+    monkeypatch.setattr(config, "WARN_PYTHON_DEBUG_MODE", False)
+
+    caught = _compile_and_collect_warnings(testee_prog)
+
+    assert not [w for w in caught if "optimized mode" in str(w.message)]
+
+
+@pytest.mark.skipif(not __debug__, reason="The warning is only issued when not running with `-O`.")
+def test_python_debug_mode_warning_is_opt_in(testee_prog, noop_runner, monkeypatch):
+    monkeypatch.setattr(config, "WARN_PYTHON_DEBUG_MODE", True)
+
+    caught = _compile_and_collect_warnings(testee_prog)
+
+    assert len([w for w in caught if "optimized mode" in str(w.message)]) == 1
 
 
 def test_dispatch_miss_without_argument_descriptors(testee_prog):
