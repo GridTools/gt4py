@@ -21,11 +21,12 @@ import contextvars
 import dataclasses
 import inspect
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, cast
 
 import numpy as np
 import torch
 
+from gt4py._core import ndarray_utils as core_ndarray_utils
 from gt4py.next import backend as next_backend, common
 
 
@@ -117,4 +118,6 @@ class TorchCompileBackend(next_backend.EmbeddedBackend):
         return run
 
 
-torch_compile = TorchCompileBackend(name="torch_compile", allocator=torch)
+torch_compile = TorchCompileBackend(
+    name="torch_compile", allocator=cast(core_ndarray_utils.ArrayNamespace, torch)
+)

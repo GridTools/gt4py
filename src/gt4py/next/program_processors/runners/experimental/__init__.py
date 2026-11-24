@@ -7,4 +7,4 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 
-"""Experimental backends: embedded execution inside the tracing compiler of an array library."""
+"""Experimental backends: embedded execution, eager or inside the tracing compiler of an array library."""

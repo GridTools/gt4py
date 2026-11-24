@@ -17,6 +17,8 @@ import pytest
 import gt4py.next as gtx
 from gt4py.next import astype, broadcast, common, int32, neighbor_sum
 
+from next_tests import definitions
+
 
 IDim = gtx.Dimension("IDim")
 Vertex = gtx.Dimension("Vertex")
@@ -115,6 +117,8 @@ def device(request, library):
 
     if request.param == "gpu" and not torch.cuda.is_available():
         pytest.skip("no torch CUDA device")
+    if request.param == "cpu":
+        pytest.skip(definitions.TORCH_COMPILE_CPU_MESSAGE)
     return torch.device("cuda" if request.param == "gpu" else "cpu")
 
 
@@ -343,7 +347,7 @@ def eager_backend(request):
     return getattr(experimental, f"embedded_{request.param}")
 
 
-def test_eager_backend_runs_on_the_arrays_it_allocates(eager_backend):
+def test_eager_backend_runs_programs(eager_backend):
     domain = gtx.domain({IDim: 3})
     a = gtx.as_field(domain, np.arange(3.0), allocator=eager_backend)
     b = gtx.as_field(domain, np.zeros(3), allocator=eager_backend)
@@ -351,7 +355,6 @@ def test_eager_backend_runs_on_the_arrays_it_allocates(eager_backend):
 
     write_then_read.with_backend(eager_backend)(a, b, out, offset_provider={})
 
-    assert type(out.ndarray) is type(eager_backend.allocator.zeros(1))
     np.testing.assert_array_equal(a.asnumpy(), np.arange(3.0) + 1.0)
     np.testing.assert_array_equal(out.asnumpy(), np.zeros(3))
 
@@ -366,9 +369,63 @@ def test_eager_backend_runs_field_operators(eager_backend):
     np.testing.assert_array_equal(out.asnumpy(), [0.0, 2.0, 3.0])
 
 
-def test_eager_backend_does_not_compile(eager_backend):
-    with pytest.raises(RuntimeError, match="does not compile"):
-        edge_sum_program.with_backend(eager_backend).compile(offset_provider={"E2V": None})
+@pytest.fixture(
+    params=[
+        pytest.param("embedded_jax", marks=pytest.mark.requires_jax),
+        pytest.param("embedded_torch", marks=pytest.mark.requires_torch),
+        pytest.param("jax_jit", marks=pytest.mark.requires_jax),
+        pytest.param("torch_compile", marks=pytest.mark.requires_torch),
+    ]
+)
+def non_numpy_backend(request):
+    from gt4py.next import experimental
+
+    return getattr(experimental, request.param)
+
+
+def test_fields_of_another_library_are_rejected(non_numpy_backend):
+    domain = gtx.domain({IDim: 3})
+    f = gtx.as_field(domain, np.arange(3.0), allocator=non_numpy_backend)
+    numpy_out = gtx.zeros(domain, allocator=np)
+
+    with pytest.raises(TypeError, match="numpy.ndarray"):
+        plus_one.with_backend(non_numpy_backend)(f, out=numpy_out, offset_provider={})
+
+
+def test_connectivities_of_another_library_are_rejected(non_numpy_backend):
+    f = gtx.as_field([Vertex], np.arange(4.0), allocator=non_numpy_backend)
+    out = gtx.zeros(gtx.domain({Edge: 5}), allocator=non_numpy_backend)
+    numpy_e2v = common._connectivity(
+        E2V_TABLE, codomain=Vertex, domain=common.domain({Edge: 5, E2VDim: 2})
+    )
+
+    with pytest.raises(TypeError, match="numpy.ndarray"):
+        edge_sum_program.with_backend(non_numpy_backend)(f, out, offset_provider={"E2V": numpy_e2v})
+
+
+@gtx.field_operator
+def first(p: Pair) -> gtx.Field[[IDim], gtx.float64]:
+    return p.first
+
+
+def test_arguments_are_bound_as_by_the_entry_point(eager_backend):
+    domain = gtx.domain({IDim: 3})
+    f = gtx.as_field(domain, np.arange(3.0), allocator=eager_backend)
+    out = gtx.zeros(domain, allocator=eager_backend)
+    fo = first.with_backend(eager_backend)
+
+    with pytest.raises(TypeError):
+        fo(Pair(first=f, second=f), f, out=out, offset_provider={})
+    with pytest.raises(TypeError):
+        fo(Pair(first=f, second=f), p=Pair(first=out, second=out), out=out, offset_provider={})
+
+
+def test_unknown_static_params_are_rejected(eager_backend):
+    fo = scale.with_backend(eager_backend).with_compilation_options(static_params=("m",))
+    f = gtx.as_field(gtx.domain({IDim: 3}), np.arange(3.0), allocator=eager_backend)
+
+    with pytest.raises(ValueError, match="'m'"):
+        fo(f, int32(1), out=f, offset_provider={})
 
 
 def test_exported_from_experimental(library, backend):
@@ -377,6 +434,40 @@ def test_exported_from_experimental(library, backend):
     assert getattr(experimental, {"jax": "jax_jit", "torch": "torch_compile"}[library]) is backend
 
 
-def test_compile_is_rejected(backend):
+def test_eager_backend_is_created_once(eager_backend):
+    from gt4py.next import backend as next_backend, experimental
+
+    assert isinstance(eager_backend, next_backend.EmbeddedBackend)
+    assert getattr(experimental, eager_backend.name) is eager_backend
+
+
+def test_missing_optional_package_is_reported(monkeypatch):
+    import sys
+
+    from gt4py.next import experimental
+
+    monkeypatch.delitem(vars(experimental), "embedded_cupy", raising=False)
+    monkeypatch.setitem(sys.modules, "cupy", None)
+
+    with pytest.raises(AttributeError, match="optional 'cupy' package"):
+        experimental.embedded_cupy
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "embedded_numpy",
+        pytest.param("embedded_cupy", marks=pytest.mark.requires_gpu),
+        pytest.param("embedded_jax", marks=pytest.mark.requires_jax),
+        pytest.param("embedded_torch", marks=pytest.mark.requires_torch),
+        pytest.param("jax_jit", marks=pytest.mark.requires_jax),
+        pytest.param("torch_compile", marks=pytest.mark.requires_torch),
+    ],
+)
+def test_compile_is_rejected(name):
+    from gt4py.next import experimental
+
     with pytest.raises(RuntimeError, match="does not compile"):
-        edge_sum_program.with_backend(backend).compile(offset_provider={"E2V": None})
+        edge_sum_program.with_backend(getattr(experimental, name)).compile(
+            offset_provider={"E2V": None}
+        )

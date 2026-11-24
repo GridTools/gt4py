@@ -18,11 +18,12 @@ from __future__ import annotations
 import dataclasses
 import inspect
 from collections.abc import Callable, Sequence
-from typing import Any
+from typing import Any, cast
 
 import jax
 import jax.numpy as jnp
 
+from gt4py._core import ndarray_utils as core_ndarray_utils
 from gt4py.next import backend as next_backend, common
 from gt4py.next.embedded import nd_array_field
 
@@ -53,13 +54,13 @@ def _mark_aliases(tree: Any) -> Any:
         if isinstance(leaf, common.Field) and (index := first.setdefault(id(leaf), i)) != i:
             leaves[i] = _Alias(index)
             aliased = True
-    return treedef.unflatten(leaves) if aliased else tree
+    return jax.tree.unflatten(treedef, leaves) if aliased else tree
 
 
 def _resolve_aliases(tree: Any) -> Any:
     leaves, treedef = jax.tree.flatten(tree, is_leaf=_is_field_or_alias)
-    return treedef.unflatten(
-        [leaves[leaf.index] if isinstance(leaf, _Alias) else leaf for leaf in leaves]
+    return jax.tree.unflatten(
+        treedef, [leaves[leaf.index] if isinstance(leaf, _Alias) else leaf for leaf in leaves]
     )
 
 
@@ -113,4 +114,4 @@ class JaxJitBackend(next_backend.EmbeddedBackend):
         return run
 
 
-jax_jit = JaxJitBackend(name="jax_jit", allocator=jnp)
+jax_jit = JaxJitBackend(name="jax_jit", allocator=cast(core_ndarray_utils.ArrayNamespace, jnp))
