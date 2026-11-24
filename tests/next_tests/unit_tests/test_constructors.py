@@ -353,7 +353,7 @@ def test_torch_allocator_follows_default_device():
 
 
 @pytest.mark.requires_gpu
-def test_cupy_allocator_places_fields_on_the_given_device():
+def test_gpu_allocators_place_fields_on_the_given_device():
     cupy = pytest.importorskip("cupy")
     if cupy.cuda.runtime.getDeviceCount() < 2:
         pytest.skip("needs two GPUs")
@@ -365,6 +365,19 @@ def test_cupy_allocator_places_fields_on_the_given_device():
         gtx.ones({I: 3}, allocator=cupy, device=device),
         gtx.full({I: 3}, 2.0, allocator=cupy, device=device),
         gtx.as_field([I], np.arange(3.0), allocator=cupy, device=device),
+        gtx.zeros({I: 3}, device=device),
+        gtx.as_field([I], np.arange(3.0), device=device),
     ]
 
     assert [field.ndarray.device.id for field in fields] == [1] * len(fields)
+
+
+@pytest.mark.requires_gpu
+@pytest.mark.parametrize("allocator", [None, "cupy"])
+def test_gpu_allocators_reject_a_missing_device(allocator):
+    cupy = pytest.importorskip("cupy")
+    count = cupy.cuda.runtime.getDeviceCount()
+    device = core_defs.Device(core_defs.CUPY_DEVICE_TYPE, count)
+
+    with pytest.raises(ValueError, match=f"CuPy has no .* device {count}"):
+        gtx.zeros({I: 3}, allocator=cupy if allocator else None, device=device)
