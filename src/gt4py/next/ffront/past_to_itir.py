@@ -510,6 +510,11 @@ class ProgramLowering(
             new_symbol_type = node.type
         return itir.Sym(id=node.id, type=new_symbol_type)
 
+    def visit_Attribute(self, node: past.Attribute, **kwargs: Any) -> itir.FunCall:
+        named_tup_type = node.value.type
+        assert isinstance(named_tup_type, ts.NamedCollectionType)
+        return im.tuple_get(named_tup_type.keys.index(node.attr), self.visit(node.value, **kwargs))
+
     def visit_BinOp(self, node: past.BinOp, **kwargs: Any) -> itir.FunCall:
         return itir.FunCall(
             fun=itir.SymRef(id=node.op.value),

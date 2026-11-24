@@ -8,7 +8,7 @@
 
 
 import re
-from typing import Literal
+from typing import Literal, NamedTuple
 
 import pytest
 
@@ -172,6 +172,43 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
     )
 
     program_pattern.match(itir_node, raise_exception=True)
+
+
+class Bounds(NamedTuple):
+    lower: gtx.int32
+    upper: gtx.int32
+
+
+class NestedBounds(NamedTuple):
+    scale: gtx.int32
+    i: Bounds
+
+
+def test_named_collection_attribute_in_domain(identity_def, gtir_identity_fundef):
+    identity = gtx.field_operator(identity_def)
+
+    def program(
+        in_field: gtx.Field[[IDim], float64],
+        out: gtx.Field[[IDim], float64],
+        bounds: NestedBounds,
+    ):
+        identity(in_field, out=out, domain={IDim: (bounds.i.lower, bounds.i.upper)})
+
+    itir_node = ProgramLowering.apply(
+        ProgramParser.apply_to_function(program),
+        function_definitions=[gtir_identity_fundef],
+        grid_type=gtx.GridType.CARTESIAN,
+    )
+
+    assert itir_node.body[0].domain == im.domain(
+        gtx.GridType.CARTESIAN,
+        {
+            IDim: (
+                im.tuple_get(0, im.tuple_get(1, "bounds")),
+                im.tuple_get(1, im.tuple_get(1, "bounds")),
+            )
+        },
+    )
 
 
 make_tuple_op_definition = itir.FunctionDefinition(
