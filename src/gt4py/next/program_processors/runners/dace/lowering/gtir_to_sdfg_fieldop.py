@@ -136,7 +136,11 @@ def _create_field_operator_impl(
     # A zero-dimensional field operator is lowered to a trivial map, therefore its
     #  result is a zero-dimensional field even when domain inference has assigned it
     #  a domain, e.g. `make_const_list` of a scalar value used as `concat_where` branch.
-    field_domain = [] if is_zero_dim else gtir_domain.get_field_domain(output_domain)
+    field_domain = (
+        []
+        if is_zero_dim
+        else gtir_domain.get_field_domain(output_domain, sdfg_builder.get_symbolic_domain_bound)
+    )
 
     dataflow_output_desc = output_edge.result.dc_node.desc(ctx.sdfg)
 

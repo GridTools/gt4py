@@ -31,7 +31,6 @@ from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_domain,
     gtir_to_sdfg,
     gtir_to_sdfg_types,
-    gtir_to_sdfg_utils,
 )
 from gt4py.next.type_system import type_specifications as ts
 
@@ -114,15 +113,20 @@ def _translate_concat_where_branch(
         # We promote the input expression to a field defined on the output domain,
         # refer to the function documentation for examples of such field operators.
         if concat_dim not in source_domain.ranges:
+            # The region of this branch is the intersection of the output domain, computed
+            #  below, with a half-infinite range. Note that the bounds of the output domain
+            #  are not used to construct this range: they can contain runtime conditions
+            #  (if some part of the output domain is empty at runtime, see `domain_utils`),
+            #  which would then end up in the conditions of the intersection.
             source_domain.ranges[concat_dim] = (
                 domain_utils.SymbolicRange(
-                    start=output_domain.ranges[concat_dim].start,
+                    start=gtir.InfinityLiteral.NEGATIVE,
                     stop=concat_dim_bound_expr,
                 )
                 if is_lower
                 else domain_utils.SymbolicRange(
                     start=concat_dim_bound_expr,
-                    stop=output_domain.ranges[concat_dim].stop,
+                    stop=gtir.InfinityLiteral.POSITIVE,
                 )
             )
         source_domain = domain_utils.promote_domain(source_domain, output_type.dims)
@@ -139,8 +143,8 @@ def _translate_concat_where_branch(
 
     assert source.gt_type == output_type
     source_domain_range = source_domain.ranges[concat_dim]
-    source_range_0 = gtir_to_sdfg_utils.get_symbolic(source_domain_range.start)
-    source_range_1 = gtir_to_sdfg_utils.get_symbolic(
+    source_range_0 = sdfg_builder.get_symbolic_domain_bound(source_domain_range.start)
+    source_range_1 = sdfg_builder.get_symbolic_domain_bound(
         im.maximum(source_domain_range.start, source_domain_range.stop)
     )
     source_range_size = source_range_1 - source_range_0
@@ -248,7 +252,9 @@ def translate_concat_where(
         raise ValueError(f"Unexpected concat mask {mask_domain} with finite domain.")
 
     # We use the concat domain, stored in the annex, as the domain of output field.
-    output_domain = gtir_domain.get_field_domain(node.annex.domain)
+    output_domain = gtir_domain.get_field_domain(
+        node.annex.domain, sdfg_builder.get_symbolic_domain_bound
+    )
     output_dims, output_origin, output_shape = gtir_domain.get_field_layout(output_domain)
     assert output_dims == node.type.dims
 

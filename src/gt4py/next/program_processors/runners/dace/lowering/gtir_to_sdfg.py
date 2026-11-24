@@ -15,6 +15,7 @@ Note: this module covers the fieldview flavour of GTIR.
 from __future__ import annotations
 
 import abc
+import ast
 import dataclasses
 from typing import (
     Any,
@@ -33,6 +34,7 @@ from typing import (
 import dace
 from dace import nodes as dace_nodes, subsets as dace_subsets
 from dace.frontend.python import astutils as dace_astutils
+from dace.sdfg.replace import replace_properties_dict as dace_replace_properties_dict
 
 from gt4py import eve
 from gt4py.eve import concepts
@@ -48,6 +50,7 @@ from gt4py.next.iterator.type_system import inference as gtir_type_inference
 from gt4py.next.program_processors.runners.dace import sdfg_args as gtx_dace_args
 from gt4py.next.program_processors.runners.dace.lowering import (
     gtir_domain,
+    gtir_python_codegen,
     gtir_to_sdfg_concat_where,
     gtir_to_sdfg_primitives,
     gtir_to_sdfg_scan,
@@ -71,6 +74,14 @@ here. Translators reached structurally or by node type (`translate_as_fieldop`,
 `translate_scalar_expr`, `translate_literal`, `translate_symbol_ref`) are
 intentionally absent.
 """
+
+DOMAIN_BOUND_SYMBOL_PREFIX: Final[str] = "__gtx_domain_bound_"
+"""Prefix of the SDFG symbols for domain bounds with runtime conditions.
+
+See `GTIRToSDFG.get_symbolic_domain_bound()`.
+"""
+
+_DOMAIN_BOUNDS_STATE_LABELS: Final[tuple[str, str]] = ("domain_bound_terms", "domain_bounds")
 
 
 def _replace_connectors_in_code_string(
@@ -464,6 +475,15 @@ class SDFGBuilder(DataflowBuilder, Protocol):
         ...
 
     @abc.abstractmethod
+    def get_symbolic_domain_bound(self, bound: gtir.Expr) -> dace.symbolic.SymbolicType:
+        """Convert the bound of a domain range to a dace symbolic expression.
+
+        A bound that contains runtime conditions is replaced by an SDFG symbol, see
+        the implementation in `GTIRToSDFG`.
+        """
+        ...
+
+    @abc.abstractmethod
     def visit(self, node: concepts.RootNode, **kwargs: Any) -> Any:
         """Visit a node of the GT4Py IR."""
         ...
@@ -567,6 +587,18 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
     column_axis: Optional[gtx_common.Dimension]
     uids: gtx_utils.IDGeneratorPool = dataclasses.field(
         init=False, repr=False, default_factory=lambda: gtx_utils.IDGeneratorPool()
+    )
+    # The symbols of the program SDFG that domain bounds can be computed from on the
+    #  program entry edge, see `get_symbolic_domain_bound()`, set in `visit_Program()`.
+    program_symbols: set[str] = dataclasses.field(init=False, repr=False, default_factory=set)
+    # The domain bounds computed on the program entry edges, see `get_symbolic_domain_bound()`:
+    #  map the Python code that computes the conditional terms and the bounds to the SDFG
+    #  symbols holding their value.
+    domain_bound_terms: dict[str, dace.symbol] = dataclasses.field(
+        init=False, repr=False, default_factory=dict
+    )
+    domain_bound_symbols: dict[str, dace.symbol] = dataclasses.field(
+        init=False, repr=False, default_factory=dict
     )
 
     def get_offset_provider_type(self, offset: str) -> gtx_common.OffsetProviderTypeElem:
@@ -813,6 +845,63 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         )
 
         return nsdfg_node, input_memlets, nsdfg_symbols_mapping
+
+    def get_symbolic_domain_bound(self, bound: gtir.Expr) -> dace.symbolic.SymbolicType:
+        """Convert the bound of a domain range to a dace symbolic expression.
+
+        Domain inference guards the bounds of the regions which may be empty at
+        runtime with runtime conditions, i.e. `if_` expressions (see `domain_utils`).
+        DaCe represents them as `IfExpr`, which SymPy handles poorly: memlet propagation
+        and the SDFG transformations simplify symbolic expressions all the time, and
+        simplifying the comparisons in the conditions takes very long and can even fail.
+        Therefore, a bound containing a conditional expression is replaced by an SDFG
+        symbol, which is computed at program entry, so that SymPy only sees a symbol.
+        This requires that the bound only depends on program symbols, otherwise the
+        symbolic expression is returned as it is.
+
+        The bounds are computed on two interstate edges: the first one computes the
+        conditional expressions, the second one the bounds from them, typically the
+        minimum or maximum of several conditional expressions. This keeps the expressions
+        assigned on the edges small, which DaCe parses with SymPy.
+
+        Note that DaCe's symbol and constant propagation passes substitute such symbols
+        by their value, see `detach_domain_bound_symbols()` for how to optimize the SDFG.
+        """
+        if not any(
+            cpm.is_call_to(node, "if_")
+            for node in eve.walk_values(bound).if_isinstance(gtir.FunCall)
+        ):
+            return gtir_to_sdfg_utils.get_symbolic(bound)
+        if not _python_symbol_names(gtir_python_codegen.get_source(bound)) <= self.program_symbols:
+            return gtir_to_sdfg_utils.get_symbolic(bound)
+        # The Python code of the GTIR expressions, which DaCe translates to C++ in interstate
+        #  edge assignments. Note that the SymPy representation cannot be used there, e.g.
+        #  there is no C++ function for `OR`, and it is expensive to create.
+        python_code = gtir_python_codegen.get_source(self._replace_conditional_terms(bound))
+        if python_code not in self.domain_bound_symbols:
+            self.domain_bound_symbols[python_code] = dace.symbol(
+                f"{DOMAIN_BOUND_SYMBOL_PREFIX}{len(self.domain_bound_symbols)}",
+                gtx_dace_args.FIELD_SYMBOL_DTYPE,
+            )
+        return self.domain_bound_symbols[python_code]
+
+    def _replace_conditional_terms(self, expr: gtir.Expr) -> gtir.Expr:
+        """Replace the `if_` expressions in `expr` by symbols, see `get_symbolic_domain_bound()`."""
+        if not isinstance(expr, gtir.FunCall):
+            return expr
+        if cpm.is_call_to(expr, "if_"):
+            python_code = gtir_python_codegen.get_source(expr)
+            if python_code not in self.domain_bound_terms:
+                self.domain_bound_terms[python_code] = dace.symbol(
+                    f"{DOMAIN_BOUND_SYMBOL_PREFIX}term_{len(self.domain_bound_terms)}",
+                    gtx_dace_args.FIELD_SYMBOL_DTYPE,
+                )
+            return im.ref(self.domain_bound_terms[python_code].name, expr.type)
+        return gtir.FunCall(
+            fun=expr.fun,
+            args=[self._replace_conditional_terms(arg) for arg in expr.args],
+            type=expr.type,
+        )
 
     def unique_nsdfg_name(self, prefix: str) -> str:
         return next(self.uids[prefix])
@@ -1084,6 +1173,24 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             sdfg, node.params, symbolic_params=None, use_transient_storage=False
         )
 
+        # Domain bounds that only depend on the symbols of the program SDFG can be computed
+        #  on the program entry edge. Symbols that a lambda parameter can shadow, i.e. with
+        #  the same name or a name derived from it (tuple elements, range symbols), are
+        #  excluded, to be on the safe side.
+        lambda_params = {
+            str(param.id)
+            for lambda_node in eve.walk_values(node).if_isinstance(gtir.Lambda)
+            for param in lambda_node.params
+        }
+        self.program_symbols.update(
+            sym
+            for sym in sdfg.symbols
+            if not any(
+                sym == param or sym.startswith((f"{param}_", f"__{param}_"))
+                for param in lambda_params
+            )
+        )
+
         # visit one statement at a time and expand the SDFG from the current head state
         scope_symbols = {str(p.id): p.type for p in node.params if isinstance(p.type, ts.DataType)}
         for i, stmt in enumerate(node.body):
@@ -1091,6 +1198,29 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
             head_state = sdfg.add_state_after(head_state, f"stmt_{i}")
             head_state._debuginfo = gtir_to_sdfg_utils.debug_info(stmt, default=sdfg.debuginfo)
             head_state = self.visit(stmt, ctx=SubgraphContext(sdfg, head_state, scope_symbols))
+
+        # compute the domain bounds replaced by symbols, see `get_symbolic_domain_bound()`
+        if self.domain_bound_symbols:
+            for dc_symbol in [
+                *self.domain_bound_terms.values(),
+                *self.domain_bound_symbols.values(),
+            ]:
+                # note that the symbol might have already been added by dace, if used in
+                #  the shape of some array, in which case we just set its type
+                sdfg.symbols[dc_symbol.name] = dc_symbol.dtype
+            _add_entry_assignments(
+                sdfg,
+                [
+                    {
+                        dc_symbol.name: python_code
+                        for python_code, dc_symbol in self.domain_bound_terms.items()
+                    },
+                    {
+                        dc_symbol.name: python_code
+                        for python_code, dc_symbol in self.domain_bound_symbols.items()
+                    },
+                ],
+            )
 
         # remove unused connectivity tables (by design, arrays are marked as non-transient when they are used)
         for nsdfg in sdfg.all_sdfgs_recursive():
@@ -1133,7 +1263,9 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         ) -> None:
             assert source.dc_node.desc(ctx.sdfg).transient
             assert source.gt_type == target.gt_type
-            field_domain = gtir_domain.get_field_domain(target_domain)
+            field_domain = gtir_domain.get_field_domain(
+                target_domain, self.get_symbolic_domain_bound
+            )
             source_subset = _make_access_index_for_field(field_domain, source)
             target_subset = _make_access_index_for_field(field_domain, target)
 
@@ -1406,6 +1538,162 @@ class GTIRToSDFG(eve.NodeVisitor, SDFGBuilder):
         ctx: SubgraphContext,
     ) -> gtir_to_sdfg_types.FieldopResult:
         return gtir_to_sdfg_primitives.translate_symbol_ref(node, ctx, self)
+
+
+def _python_symbol_names(python_code: str) -> set[str]:
+    """Return the names in a Python expression, except for the names of called functions."""
+    code_ast = ast.parse(python_code, mode="eval")
+    called = {id(node.func) for node in ast.walk(code_ast) if isinstance(node, ast.Call)}
+    return {
+        node.id
+        for node in ast.walk(code_ast)
+        if isinstance(node, ast.Name) and id(node) not in called
+    }
+
+
+def _add_entry_assignments(sdfg: dace.SDFG, assignments: Sequence[dict[str, str]]) -> None:
+    """Add a chain of interstate edges with the given assignments at the entry of the SDFG."""
+    assert len(assignments) == len(_DOMAIN_BOUNDS_STATE_LABELS)
+    for label, edge_assignments in reversed(
+        list(zip(_DOMAIN_BOUNDS_STATE_LABELS, assignments, strict=True))
+    ):
+        sdfg.add_state_before(
+            sdfg.start_block, label, is_start_block=True, assignments=dict(edge_assignments)
+        )
+
+
+@dataclasses.dataclass(frozen=True)
+class DomainBoundSymbols:
+    """The computation of the domain bound symbols, see `detach_domain_bound_symbols()`."""
+
+    assignments: tuple[dict[str, str], ...]
+    """The symbol assignments, as on the program entry edges."""
+    symbol_types: dict[str, dace.typeclass]
+    """The types of the symbols assigned and of the symbols they are computed from."""
+
+
+def detach_domain_bound_symbols(sdfg: dace.SDFG) -> DomainBoundSymbols:
+    """
+    Remove the computation of the domain bound symbols from the program entry edge.
+
+    Domain bounds with runtime conditions are SDFG symbols computed on the program entry
+    edge (see `GTIRToSDFG.get_symbolic_domain_bound()`). DaCe's `SymbolPropagation` and
+    `ConstantPropagation` passes, which run in `gt_simplify()` and when constant symbols
+    are substituted, would replace these symbols by their value everywhere, which brings
+    back the conditional expressions SymPy handles poorly. This function removes the
+    assignments, so that the domain bound symbols are free symbols of the SDFG while it is
+    transformed, and returns them to be added back by `attach_domain_bound_symbols()`.
+    """
+    assignments: list[dict[str, str]] = []
+    block = sdfg.start_block
+    while len(assignments) < len(_DOMAIN_BOUNDS_STATE_LABELS) and isinstance(block, dace.SDFGState):
+        if block.label != _DOMAIN_BOUNDS_STATE_LABELS[len(assignments)]:
+            break
+        (edge,) = sdfg.out_edges(block)
+        names = [
+            name for name in edge.data.assignments if name.startswith(DOMAIN_BOUND_SYMBOL_PREFIX)
+        ]
+        assignments.append({name: edge.data.assignments.pop(name) for name in names})
+        block = edge.dst
+    if len(assignments) != len(_DOMAIN_BOUNDS_STATE_LABELS):
+        assert not any(assignments)
+        assignments = []
+    used_symbols = {name for edge_assignments in assignments for name in edge_assignments}.union(
+        *(
+            _python_symbol_names(value)
+            for edge_assignments in assignments
+            for value in edge_assignments.values()
+        )
+    )
+    return DomainBoundSymbols(
+        assignments=tuple(assignments),
+        symbol_types={sym: sdfg.symbols[sym] for sym in used_symbols if sym in sdfg.symbols},
+    )
+
+
+def attach_domain_bound_symbols(
+    sdfg: dace.SDFG,
+    domain_bounds: DomainBoundSymbols,
+    constant_symbols: Mapping[str, Any],
+) -> None:
+    """
+    Add back the computation of the domain bound symbols on a new program entry edge.
+
+    This is the counterpart of `detach_domain_bound_symbols()`. The values of the symbols
+    in `constant_symbols`, which might have been substituted in the SDFG in the meantime,
+    are substituted in the assignments too.
+
+    The domain bound symbols are not free symbols anymore, but transients whose size
+    depends on them may have been configured to be allocated when the SDFG is initialized
+    (lifetime `Persistent` or `External`, see `gt_configure_transient_lifetime()`).
+    Therefore, the domain bound symbols are replaced by their values in the data
+    descriptors of these transients, which then only depend on free symbols. The data
+    descriptors of nested SDFGs cannot refer to these values, which depend on symbols that
+    might not be mapped into the nested SDFG: the lifetime of such transients is reset to
+    `Scope`. Other transients are allocated after the domain bound symbols are computed.
+    """
+    if not domain_bounds.assignments:
+        return
+    for sym, sym_type in domain_bounds.symbol_types.items():
+        if sym not in sdfg.symbols and sym not in constant_symbols:
+            sdfg.add_symbol(sym, sym_type)
+    _add_entry_assignments(sdfg, domain_bounds.assignments)
+    assignments: dict[str, str] = {}
+    block = sdfg.start_block
+    for _ in domain_bounds.assignments:
+        (edge,) = sdfg.out_edges(block)
+        edge.data.replace_dict({sym: str(value) for sym, value in constant_symbols.items()})
+        assignments |= edge.data.assignments
+        block = edge.dst
+
+    # replace the domain bound symbols by their values in the data descriptors of the
+    #  transients allocated at initialization
+    init_lifetimes = {dace.AllocationLifetime.Persistent, dace.AllocationLifetime.External}
+    values: dict[str, dace.symbolic.SymbolicType] = {}
+
+    def value_of(name: str) -> dace.symbolic.SymbolicType:
+        if name not in values:
+            value = dace.symbolic.pystr_to_symbolic(assignments[name])
+            values[name] = value.subs(
+                {sym: value_of(str(sym)) for sym in value.free_symbols if str(sym) in assignments}
+            )
+        return values[name]
+
+    for desc in sdfg.arrays.values():
+        if desc.transient and desc.lifetime in init_lifetimes:
+            if symrepl := {
+                sym: value_of(str(sym)) for sym in desc.free_symbols if str(sym) in assignments
+            }:
+                dace_replace_properties_dict(desc, {}, symrepl)
+
+    # demote the transients of nested SDFGs that depend on the domain bound symbols
+    def demote_transients(nsdfg: dace.SDFG, dependent_symbols: set[str]) -> None:
+        for desc in nsdfg.arrays.values():
+            if (
+                desc.transient
+                and desc.lifetime in init_lifetimes
+                and not dependent_symbols.isdisjoint(str(sym) for sym in desc.free_symbols)
+            ):
+                desc.lifetime = dace.AllocationLifetime.Scope
+        visit_nested_sdfgs(nsdfg, dependent_symbols)
+
+    def visit_nested_sdfgs(nsdfg: dace.SDFG, dependent_symbols: set[str]) -> None:
+        for state in nsdfg.states():
+            for node in state.nodes():
+                if isinstance(node, dace_nodes.NestedSDFG):
+                    demote_transients(
+                        node.sdfg,
+                        {
+                            inner_sym
+                            for inner_sym, value in node.symbol_mapping.items()
+                            if not dependent_symbols.isdisjoint(
+                                str(sym)
+                                for sym in dace.symbolic.pystr_to_symbolic(value).free_symbols
+                            )
+                        },
+                    )
+
+    visit_nested_sdfgs(sdfg, set(assignments.keys()))
 
 
 def lower_program_to_sdfg(

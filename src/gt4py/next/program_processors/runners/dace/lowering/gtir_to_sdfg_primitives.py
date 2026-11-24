@@ -101,7 +101,8 @@ def translate_as_fieldop(
     # Parse the domain of the field operator.
     assert isinstance(fieldop_domain_expr.type, ts.DomainType)
     field_domain = gtir_domain.get_field_domain(
-        domain_utils.SymbolicDomain.from_expr(fieldop_domain_expr)
+        domain_utils.SymbolicDomain.from_expr(fieldop_domain_expr),
+        sdfg_builder.get_symbolic_domain_bound,
     )
 
     if cpm.is_call_to(fieldop_expr, "scan"):
@@ -174,7 +175,7 @@ def _construct_if_branch_output(
         return gtir_to_sdfg_types.FieldopData(out_node, out_type, origin=())
 
     assert isinstance(out_type, ts.FieldType)
-    field_domain = gtir_domain.get_field_domain(domain)
+    field_domain = gtir_domain.get_field_domain(domain, sdfg_builder.get_symbolic_domain_bound)
     dims, origin, shape = gtir_domain.get_field_layout(field_domain)
     assert dims == out_type.dims
 
@@ -328,7 +329,9 @@ def translate_index(
     assert cpm.is_call_to(node, "index")
     assert isinstance(node.type, ts.FieldType)
 
-    field_domain = gtir_domain.get_field_domain(node.annex.domain)
+    field_domain = gtir_domain.get_field_domain(
+        node.annex.domain, sdfg_builder.get_symbolic_domain_bound
+    )
     assert len(field_domain) == 1
     dim_index = gtir_to_sdfg_utils.get_map_variable(field_domain[0].dim)
 

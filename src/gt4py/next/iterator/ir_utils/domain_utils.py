@@ -450,6 +450,13 @@ def _range_hull(*ranges: SymbolicRange, simplify: bool = False) -> SymbolicRange
     )
 
 
+def _contains_if(expr: itir.Expr) -> bool:
+    """Return whether `expr` contains a call to `if_`, e.g. a bound guarded by `_union_of_parts`."""
+    return isinstance(expr, itir.Node) and any(
+        cpm.is_call_to(node, "if_") for node in expr.pre_walk_values().if_isinstance(itir.FunCall)
+    )
+
+
 def _parts(range_: SymbolicRange) -> tuple[_RangePart, ...]:
     """Return the parts of a range; a range without parts is its only, non-empty, part."""
     return range_.parts or (_RangePart(range_, None, range_),)
@@ -479,6 +486,15 @@ def _intersection_of_parts(parts: Sequence[_RangePart]) -> Optional[_RangePart]:
         for start in _flat_args(_push_offset(part_a.range.start), "maximum"):
             for stop in _flat_args(_push_offset(part_b.range.stop), "minimum"):
                 if start == itir.InfinityLiteral.NEGATIVE or stop == itir.InfinityLiteral.POSITIVE:
+                    continue
+                if _contains_if(start) or _contains_if(stop):
+                    # A bound guarded with a runtime condition, e.g. the start of a union of
+                    # parts that is used as the bound of a new range, is not compared: the
+                    # condition would contain the guard. Such conditions grow with every nesting
+                    # level and backends may not handle them well (e.g. DaCe/SymPy, which cannot
+                    # simplify a comparison of conditional expressions). Leaving out a comparison
+                    # only makes `empty_if` weaker, i.e., the part may be assumed to be non-empty
+                    # although it is empty (over-approximation).
                     continue
                 no_overlap: itir.Expr = ConstantFolding.apply(im.greater_equal(start, stop))  # type: ignore[assignment]  # always an itir.Expr
                 difference = _linear_difference(no_overlap)
