@@ -9,7 +9,7 @@
 """
 What the embedded jit backends share: the embedded execution of an entry point, as they wrap it.
 
-A stopgap until embedded execution is represented by backends (ADR 0030).
+A stopgap until embedded execution is represented by backends.
 """
 
 from __future__ import annotations

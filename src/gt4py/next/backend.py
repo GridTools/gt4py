@@ -191,7 +191,7 @@ class EmbeddedJitBackend(Backend, abc.ABC):
 
     Instead of compiling, it wraps the embedded execution of a program or field operator once,
     e.g. in `jax.jit`. The allocator allocates arrays of the library. A stopgap until embedded
-    execution is represented by backends (ADR 0030).
+    execution is represented by backends.
     """
 
     executor: workflow.Workflow[stages.CompilableProgramDef, artifacts.CompilationArtifact] = (
