@@ -436,13 +436,19 @@ def test_math_builtins_reject_nd_arrays(nd_array_implementation):
         fbuiltins.sqrt(values)
 
 
+def _library_marks(*xps):
+    return [
+        *([pytest.mark.requires_gpu] if any(is_cupy(xp) for xp in xps) else []),
+        *([pytest.mark.requires_mlx] if any(is_mlx(xp) for xp in xps) else []),
+    ]
+
+
 def product_nd_array_implementation_params():
     for xp1 in ND_ARRAY_IMPLEMENTATIONS:
         for xp2 in ND_ARRAY_IMPLEMENTATIONS:
-            marks = ()
-            if any(is_cupy(xp) for xp in (xp1, xp2)):
-                marks = pytest.mark.requires_gpu
-            yield pytest.param((xp1, xp2), id=f"{xp1.__name__}-{xp2.__name__}", marks=marks)
+            yield pytest.param(
+                (xp1, xp2), id=f"{xp1.__name__}-{xp2.__name__}", marks=_library_marks(xp1, xp2)
+            )
 
 
 @pytest.fixture(params=product_nd_array_implementation_params())
@@ -2160,9 +2166,11 @@ def _other_library_pairs():
     for field_xp in ND_ARRAY_IMPLEMENTATIONS:
         for value_xp in ND_ARRAY_IMPLEMENTATIONS:
             if field_xp is not value_xp:
-                marks = pytest.mark.requires_gpu if is_cupy(field_xp) or is_cupy(value_xp) else ()
                 yield pytest.param(
-                    field_xp, value_xp, id=f"{field_xp.__name__}-{value_xp.__name__}", marks=marks
+                    field_xp,
+                    value_xp,
+                    id=f"{field_xp.__name__}-{value_xp.__name__}",
+                    marks=_library_marks(field_xp, value_xp),
                 )
 
 

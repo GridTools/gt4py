@@ -85,8 +85,8 @@ own type.
 
 Without a backend, the code is executed by the Python interpreter. Every
 operation on fields is evaluated by the array library holding their data, which
-is NumPy for fields allocated in the default way. Other libraries, such as CuPy
-or JAX, are selected when
+is NumPy for fields allocated in the default way. Other libraries, such as CuPy,
+JAX or MLX (on Apple silicon, where it also runs on the GPU), are selected when
 [allocating the fields](grids-and-fields.md#allocating-for-embedded-execution).
 
 ```{code-cell} ipython3

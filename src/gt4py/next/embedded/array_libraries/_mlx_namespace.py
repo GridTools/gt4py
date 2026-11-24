@@ -39,6 +39,10 @@ FLOAT64_ON_GPU_MESSAGE: Final = (
     "MLX does not support 'float64' on the GPU: use 'dtype=float32', or compute on the CPU"
     " with 'mlx.core.set_default_device(mlx.core.cpu)'."
 )
+INTEGER_DIVISION_ON_GPU_MESSAGE: Final = (
+    "MLX cannot divide integers on the GPU, as the result needs 'float64': use '//', or"
+    " convert the operands to 'float32'."
+)
 
 bool = mx.bool_  # noqa: A001 # the standard's name of the boolean dtype
 
@@ -142,6 +146,7 @@ def sum(  # noqa: A001 # the standard's name
     dtype: Any = None,
     keepdims: builtins.bool = False,
 ) -> mx.array:
+    # MLX reduces in the dtype of `x` (integers narrower than 32 bits in int32), then casts
     result = mx.sum(x, axis=axis, keepdims=keepdims)
     return result if dtype is None or result.dtype == dtype else mx.astype(result, dtype)
 
@@ -151,7 +156,17 @@ def nonzero(x: mx.array, /) -> tuple[mx.array, ...]:
     return tuple(mx.array(indices) for indices in np.nonzero(np.array(x)))
 
 
+def _is_integral(x: Any) -> builtins.bool:
+    if isinstance(x, mx.array):
+        return x.dtype == mx.bool_ or mx.issubdtype(x.dtype, mx.integer)
+    return isinstance(x, builtins.bool | int | np.integer | np.bool_)
+
+
 def cbrt(x: mx.array, /) -> mx.array:
+    if x.dtype == mx.float64 or _is_integral(x):
+        # by NumPy, see `sin` below; integers in float64, as NumPy does from 32 bits
+        _check_dtype(mx.float64, None)
+        return mx.array(np.cbrt(np.array(x, dtype=np.float64)), dtype=mx.float64)
     return mx.sign(x) * mx.abs(x) ** (1.0 / 3.0)
 
 
@@ -162,13 +177,10 @@ def fmod(x1: mx.array, x2: mx.array, /) -> mx.array:
 
 
 def divide(x1: Any, x2: Any, /) -> mx.array:
-    # MLX divides integers in float32
-    if all(
-        (x.dtype == mx.bool_ or mx.issubdtype(x.dtype, mx.integer))
-        if isinstance(x, mx.array)
-        else isinstance(x, builtins.bool | int | np.integer | np.bool_)
-        for x in (x1, x2)
-    ):
+    # MLX divides integers in float32, NumPy in float64
+    if _is_integral(x1) and _is_integral(x2):
+        if mx.default_device() == mx.gpu:
+            raise TypeError(INTEGER_DIVISION_ON_GPU_MESSAGE)
         x1, x2 = (astype(x, mx.float64) if isinstance(x, mx.array) else float(x) for x in (x1, x2))
     return mx.divide(x1, x2)
 
@@ -185,7 +197,8 @@ def _float64_by_numpy(name: str) -> Any:
     return function
 
 
-# MLX 0.32.4 computes them in float64 with float32 accuracy, all others with float64 accuracy
+# MLX 0.32.4 computes `sin`, `cos`, `exp` and `cbrt` in float64 with float32 accuracy (and
+# `cbrt(-0.0)` as `+0.0`); the others have float64 accuracy. Remove when MLX fixes them.
 sin = _float64_by_numpy("sin")
 cos = _float64_by_numpy("cos")
 exp = _float64_by_numpy("exp")

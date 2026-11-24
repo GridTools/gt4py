@@ -445,3 +445,39 @@ def test_embedded_mlx_backend_allocates_mlx():
     field = gtx.zeros({I: 3}, allocator=experimental.embedded_mlx)
 
     assert isinstance(field.ndarray, mx.array)
+
+
+@pytest.mark.requires_mlx
+def test_metal_device_without_allocator_allocates_with_mlx(monkeypatch):
+    # MLX as on Apple silicon, whose default device is the GPU; no array is computed on it
+    import mlx.core as mx
+
+    monkeypatch.setattr(mx, "default_device", lambda: mx.Device(mx.gpu))
+    monkeypatch.setattr(mx.metal, "is_available", lambda: True)
+
+    # `gtx.zeros` caches the constructor, with the device it translated
+    field = constructors.FieldConstructor(
+        device=core_defs.Device(core_defs.DeviceType.METAL, 0)
+    ).zeros({I: 3}, dtype=np.float32)
+
+    assert isinstance(field.ndarray, mx.array)
+    assert field.ndarray.dtype == mx.float32
+
+
+@pytest.mark.requires_mlx
+def test_metal_device_without_allocator_and_metal_raises(monkeypatch):
+    import mlx.core as mx
+
+    monkeypatch.setattr(mx.metal, "is_available", lambda: False)
+
+    with pytest.raises(ValueError, match="does not support device type"):
+        constructors.FieldConstructor(device=core_defs.Device(core_defs.DeviceType.METAL, 0))
+
+
+def test_metal_device_without_mlx_raises(monkeypatch):
+    import sys
+
+    monkeypatch.setitem(sys.modules, "mlx.core", None)  # `import mlx.core` raises
+
+    with pytest.raises(ValueError, match="needs the 'mlx' package.*allocator=mlx.core"):
+        constructors.FieldConstructor(device=core_defs.Device(core_defs.DeviceType.METAL, 0))

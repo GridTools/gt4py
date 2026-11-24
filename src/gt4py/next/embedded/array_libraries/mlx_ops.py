@@ -53,6 +53,9 @@ class MlxOps(array_ops.ArrayOps):
     def setitem(
         self, array: core_defs.NDArrayObject, key: common.RelativeIndexSequence, value: Any
     ) -> core_defs.NDArrayObject:
+        if isinstance(value, np.generic):
+            # in the dtype of `array`: a float64 0-d array is not allowed on the GPU
+            value = self.xp.asarray(value, dtype=array.dtype)
         # MLX replaces the array behind `array` by the result of the write
         array = super().setitem(array, key, value)
         self.evaluate(array)

@@ -155,10 +155,12 @@ def _mlx_default_device_cpu() -> collections.abc.Iterator[None]:
 
     The tests are written for float64. Tests on the GPU switch to it themselves.
     """
-    if not _is_importable("mlx.core"):
+    try:
+        import mlx.core as mx
+    except Exception:
+        # missing, or a broken install, which the `requires_mlx` tests report
         yield
         return
-    import mlx.core as mx
 
     default_device = mx.default_device()
     mx.set_default_device(mx.cpu)

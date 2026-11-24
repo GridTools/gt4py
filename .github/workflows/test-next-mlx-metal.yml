@@ -10,8 +10,15 @@ on:
       - "src/gt4py/next/embedded/**"
       - "src/gt4py/_core/**"
       - "src/gt4py/next/constructors.py"
+      - "src/gt4py/next/common.py"
+      - "src/gt4py/next/field_utils.py"
+      - "src/gt4py/next/experimental/**"
+      - "tests/conftest.py"
       - "tests/next_tests/**"
+      - "tests/next_tests/definitions.py"
+      - "tests/next_tests/unit_tests/conftest.py"
       - "tests/core_tests/**"
+      - "tests/core_tests/unit_tests/test_nd_array_utils.py"
       - "pyproject.toml"
       - "uv.lock"
       - "noxfile.py"
@@ -25,8 +32,10 @@ jobs:
   test-mlx-metal:
     runs-on: macos-latest
     env:
-      # Paravirtualized Metal device of hosted runners (as in the MLX own CI)
+      # Metal API validation, with validation errors reported instead of aborting the
+      # process; MLX's own CI always sets the two together
       METAL_DEVICE_WRAPPER_TYPE: "1"
+      METAL_DEBUG_ERROR_MODE: "0"
     steps:
       - uses: actions/checkout@v7
 

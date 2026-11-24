@@ -252,6 +252,10 @@ if mx is not None:
         MLX arrays have no device: operations run on the default device, which GT4Py
         never changes. `DeviceType.METAL` stands for `mlx.core.gpu` on Apple silicon; on
         Linux CUDA builds of MLX, `mlx.core.gpu` is `DeviceType.CUDA`.
+
+        MLX's `__dlpack_device__` does not tell the device either: it reports Metal `(8, 0)`
+        whenever Metal is available, also for arrays computed on the CPU, and the CPU on CUDA
+        builds. `as_field` does not rely on it for MLX arrays, see `ArrayOps.own_allocator`.
         """
         if device is None:
             return None

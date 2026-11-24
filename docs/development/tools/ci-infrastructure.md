@@ -28,7 +28,7 @@ There is an extra CI workflow on GitHub scheduled to run daily and testing `main
 
 ### MLX Metal tests
 
-The `Test MLX on Apple silicon (Metal)` workflow runs the tests marked `requires_mlx` or `requires_mlx_metal` on a `macos-latest` (Apple-silicon) runner. To limit the 10x MacOS minutes cost, it only runs for pull requests touching MLX-relevant paths (see the workflow `paths` filter) or when started manually. Hosted runners expose a paravirtualized Metal device, so treat it as smoke-test quality; its first step prints the MLX device information to help diagnosing a missing device. It calls `pytest` directly (the nox sessions do not run `tests/core_tests`). The `test_next` nox session deselects `requires_mlx_metal` tests unless `GT4PY_TEST_MLX_METAL=1` is set, which is the way to run them locally on a Mac.
+The `Test MLX on Apple silicon (Metal)` workflow runs the tests marked `requires_mlx` or `requires_mlx_metal` on a `macos-latest` (Apple-silicon) runner. To limit the 10x macOS minutes cost, it only runs for pull requests touching MLX-relevant paths (see the workflow `paths` filter) or when started manually. Hosted runners expose a paravirtualized Metal device, so treat it as smoke-test quality; its first step prints the MLX device information to help diagnosing a missing device. It calls `pytest` directly (the nox sessions do not run `tests/core_tests`). The `test_next` nox session deselects `requires_mlx_metal` tests unless `GT4PY_TEST_MLX_METAL=1` is set, which is the way to run them locally on a Mac.
 
 ### AI-assisted PR review (PR Agent)
 

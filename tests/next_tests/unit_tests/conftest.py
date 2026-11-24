@@ -155,6 +155,10 @@ def nd_array_implementation_params():
             yield pytest.param(
                 (xp, core_defs.CUPY_DEVICE_TYPE), id=xp.__name__, marks=pytest.mark.requires_gpu
             )
+        elif is_mlx(xp):
+            yield pytest.param(
+                (xp, core_defs.DeviceType.CPU), id=xp.__name__, marks=pytest.mark.requires_mlx
+            )
         else:
             yield pytest.param((xp, core_defs.DeviceType.CPU), id=xp.__name__)
 

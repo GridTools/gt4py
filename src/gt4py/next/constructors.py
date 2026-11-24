@@ -75,8 +75,19 @@ class FieldConstructor:
         if allocator is None:
             if device is None:
                 device = DEFAULT_DEVICE
-            # Currently we use optimized CPU layout, but possibly we could also use standard numpy allocation
-            allocator = next_allocators.device_allocators[device.device_type]
+            if device.device_type == core_defs.DeviceType.METAL:
+                # only MLX allocates on Metal
+                try:
+                    import mlx.core as mx
+                except ImportError:
+                    raise ValueError(
+                        "Allocating on a 'METAL' device needs the 'mlx' package:"
+                        " install it, and pass 'allocator=mlx.core' or no allocator."
+                    ) from None
+                allocator = mx
+            else:
+                # Currently we use optimized CPU layout, but possibly we could also use standard numpy allocation
+                allocator = next_allocators.device_allocators[device.device_type]
         requested = allocator
         if next_allocators.is_field_allocator_factory(allocator):
             allocator = allocator.__gt_allocator__
@@ -415,7 +426,8 @@ def empty(
             If both are given, `allocator` takes precedence over the default device allocator.
         device: The device (CPU, type of accelerator) to optimize the memory layout for.
             If neither `allocator` nor `device` is given, a default CPU device is used.
-            When only `device` is given, the default allocator for that device type is used.
+            When only `device` is given, the default allocator for that device type is used,
+            which is MLX (`mlx.core`) for a Metal device.
 
     Returns:
         A field, backed by a buffer with memory layout as specified by allocator and alignment requirements.

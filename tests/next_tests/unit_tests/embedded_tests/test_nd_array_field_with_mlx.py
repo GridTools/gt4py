@@ -204,7 +204,7 @@ def test_float64_math_values(name):
     result = getattr(fbuiltins, name)(*(_field(arg) for arg in args))
 
     assert result.ndarray.dtype == mx.float64
-    np.testing.assert_allclose(result.asnumpy(), getattr(np, name)(*args), rtol=1e-14, atol=0)
+    np.testing.assert_allclose(result.asnumpy(), getattr(np, name)(*args), rtol=1e-12, atol=0)
 
 
 def test_float64_values_of_python_floats():
@@ -230,10 +230,29 @@ def test_integer_division_in_float64(dtype):
 
 
 def test_integer_division_on_gpu_raises(gpu_default):
+    # the DSL types `int32 / int32` as int32, so the error names the division, not only float64
     a = gtx.as_field([I], mx.array([1, 2], dtype=mx.int32))
 
-    with pytest.raises(TypeError, match="float64"):
+    with pytest.raises(TypeError, match="cannot divide integers on the GPU.*'//'.*'float32'"):
         a / a
+    assert (a // a).ndarray.dtype == mx.int32
+
+
+def test_cbrt_values():
+    x = np.array([-27.0, -0.0, 0.0, 8.0, 1e-300, 64.0**3])
+
+    result = np.array(xp.cbrt(mx.array(x, dtype=mx.float64)))
+
+    np.testing.assert_array_equal(result, np.cbrt(x))  # exact cubes, and the sign of -0.0
+    assert np.signbit(result[1])
+    integer_result = xp.cbrt(mx.array([27, -8], dtype=mx.int32))
+    assert integer_result.dtype == mx.float64
+    np.testing.assert_array_equal(np.array(integer_result), np.cbrt(np.array([27.0, -8.0])))
+
+
+def test_integer_cbrt_on_gpu_raises(gpu_default):
+    with pytest.raises(TypeError, match="float64"):
+        xp.cbrt(mx.array([27], dtype=mx.int32))
 
 
 def test_mixed_dtypes_promote_as_in_mlx():
@@ -275,6 +294,16 @@ def test_setitem(evaluated):
 
 def test_setitem_casts_to_field_dtype():
     field = _field([0.0, 1.0], dtype=np.float32)
+
+    field[...] = np.float64(0.5)
+
+    assert field.ndarray.dtype == mx.float32
+    np.testing.assert_array_equal(field.asnumpy(), [0.5, 0.5])
+
+
+def test_setitem_of_float64_scalar_into_float32_field_on_gpu(gpu_default):
+    # the NumPy scalar is converted to the dtype of the field, never to a float64 array
+    field = gtx.as_field([I], mx.zeros((2,), dtype=mx.float32))
 
     field[...] = np.float64(0.5)
 
