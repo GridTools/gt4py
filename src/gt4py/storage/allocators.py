@@ -22,7 +22,7 @@ import numpy as np
 import numpy.typing as npt
 from typing_extensions import Protocol
 
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.eve import xtyping
 
 
@@ -339,8 +339,13 @@ class NDArrayBufferAllocator(_BaseNDArrayBufferAllocator[core_defs.DeviceTypeT])
 
         shape = (length,)
         assert core_defs.is_valid_tensor_shape(shape)  # for mypy
-        out = self._array_utils.empty(shape=tuple(shape), dtype=np.dtype(np.uint8))
-        return out
+        if self.device_type == core_defs.DeviceType.CPU:
+            return self._array_utils.empty(shape=tuple(shape), dtype=np.dtype(np.uint8))
+        device = core_ndarray_utils.get_device_translator(self._array_utils.array_ns)(
+            core_defs.Device(self.device_type, device_id)
+        )
+        with core_ndarray_utils.device_context(device):
+            return self._array_utils.empty(shape=tuple(shape), dtype=np.dtype(np.uint8))
 
     def tensorize(
         self,

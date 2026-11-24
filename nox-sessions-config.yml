@@ -10,6 +10,17 @@ sessions:
       - "*.md"
       - "*.rst"
 
+  - name: test_core
+    paths: # Run when gt4py._core files (or package settings) are changed
+      - "src/gt4py/_core/**"
+      - "tests/core_tests/**"
+      - ".github/workflows/**"
+      - ".cscs-ci/**"
+      - "*.lock"
+      - "*.toml"
+      - "*.yml"
+      - "noxfile.py"
+
   - name: test_eve
     paths: # Run when gt4py.eve files (or package settings) are changed
       - "src/gt4py/eve/**"

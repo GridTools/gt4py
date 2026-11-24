@@ -49,6 +49,9 @@ build_cscs_amd_rocm:
         VARIANT: ['internal', 'dace']
         SUBVARIANT: ['cuda13', 'rocm7', 'cpu']
         PY_VERSION: *test_python_versions
+      - SUBPACKAGE: [core]
+        VARIANT: ['cuda13', 'rocm7', 'cpu']
+        PY_VERSION: *test_python_versions
       - SUBPACKAGE: eve
         PY_VERSION: *test_python_versions
       - SUBPACKAGE: next
@@ -62,11 +65,11 @@ build_cscs_amd_rocm:
   rules: &exclude_variants_rules
     # Extended jobs should reference this list anchor at the proper position of their
     # `rules` section, and also add an extra `- when: on_success` rule at the end.
-    - if: '($SUBVARIANT == "cpu" || ($SUBPACKAGE == "storage" && $VARIANT == "cpu")) && ($TEST_VARIANTS !~ /(^|\s)cpu(\s|$)/)'
+    - if: '($SUBVARIANT == "cpu" || ($SUBPACKAGE =~ /^(storage|core)$/ && $VARIANT == "cpu")) && ($TEST_VARIANTS !~ /(^|\s)cpu(\s|$)/)'
       when: never
-    - if: '($SUBVARIANT == "cuda13" || ($SUBPACKAGE == "storage" && $VARIANT == "cuda13")) && ($TEST_VARIANTS !~ /(^|\s)cuda13(\s|$)/)'
+    - if: '($SUBVARIANT == "cuda13" || ($SUBPACKAGE =~ /^(storage|core)$/ && $VARIANT == "cuda13")) && ($TEST_VARIANTS !~ /(^|\s)cuda13(\s|$)/)'
       when: never
-    - if: '($SUBVARIANT == "rocm7" || ($SUBPACKAGE == "storage" && $VARIANT == "rocm7")) && ($TEST_VARIANTS !~ /(^|\s)rocm7(\s|$)/)'
+    - if: '($SUBVARIANT == "rocm7" || ($SUBPACKAGE =~ /^(storage|core)$/ && $VARIANT == "rocm7")) && ($TEST_VARIANTS !~ /(^|\s)rocm7(\s|$)/)'
       when: never
 
   script:

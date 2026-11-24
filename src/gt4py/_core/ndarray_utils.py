@@ -6,6 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import contextlib
 import dataclasses
 import functools
 from collections.abc import Hashable
@@ -193,6 +194,16 @@ Device translators are functions mapping GT4Py 'Device' objects to the correspon
 It's responsibility of the translator to check if 'Device' is valid for the given array namespace and raise a 'ValueError' if not.
 """
 
+
+def _gpu_index(library: str, device: core_defs.Device, count: int) -> int:
+    if not 0 <= device.device_id < count:
+        raise ValueError(
+            f"{library} has no {device.device_type.name} device {device.device_id}"
+            f" (number of GPU devices: {count})."
+        )
+    return device.device_id
+
+
 if cupy is not None:
 
     def _cupy_device_translator(device: core_defs.Device | None) -> Any:
@@ -202,7 +213,13 @@ if cupy is not None:
             raise ValueError(
                 f"CuPy only supports GPU devices, got device type {device.device_type}."
             )
-        return cupy.cuda.Device(device.device_id)
+        try:
+            count = cupy.cuda.runtime.getDeviceCount()
+        except cupy.cuda.runtime.CUDARuntimeError as error:
+            raise ValueError(
+                f"CuPy has no {device.device_type.name} device {device.device_id}: {error}"
+            ) from error
+        return cupy.cuda.Device(_gpu_index("CuPy", device, count))
 
     _device_translation_registry[cupy] = _cupy_device_translator
 
@@ -216,7 +233,7 @@ if torch is not None:
             return torch.device("cpu")
         # ROCm builds of torch use the 'cuda' device type
         if device.device_type in (core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM):
-            return torch.device("cuda", device.device_id)
+            return torch.device("cuda", _gpu_index("torch", device, torch.cuda.device_count()))
         raise ValueError(f"torch does not support device type {device.device_type}.")
 
     _device_translation_registry[torch] = _torch_device_translator
@@ -231,10 +248,28 @@ if jax is not None:
             return jax.local_devices(backend="cpu")[0]
         # jax's 'gpu' platform is CUDA or ROCm, whichever jaxlib was built for
         if device.device_type in (core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM):
-            return jax.local_devices(backend="gpu")[device.device_id]
+            try:
+                gpus = jax.local_devices(backend="gpu")
+            except RuntimeError as error:  # e.g. a jaxlib without GPU support, or a driver failure
+                raise ValueError(
+                    f"jax has no {device.device_type.name} device {device.device_id}: {error}"
+                ) from error
+            return gpus[_gpu_index("jax", device, len(gpus))]
         raise ValueError(f"jax does not support device type {device.device_type}.")
 
     _device_translation_registry[cast(ArrayNamespace, jnp)] = _jax_device_translator
+
+
+def device_context(device: Any) -> contextlib.AbstractContextManager:
+    """
+    The context in which an array namespace creates arrays on the translated `device`.
+
+    array-api-compat ignores `device` in CuPy's `empty`, `zeros`, `ones` and `full`: CuPy's
+    current device decides.
+    """
+    if cupy is not None and isinstance(device, cupy.cuda.Device):
+        return cupy.cuda.Device(device.id)
+    return contextlib.nullcontext()
 
 
 def get_device_translator(array_ns: ArrayNamespace) -> Callable[[core_defs.Device | None], Any]:

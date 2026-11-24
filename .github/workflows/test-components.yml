@@ -73,6 +73,8 @@ jobs:
             args: "(internal, cpu)"
           - name: test_cartesian
             args: "(dace, cpu)"
+          - name: test_core
+            args: "(cpu)"
           - name: test_eve
             args: ""
           - name: test_next
