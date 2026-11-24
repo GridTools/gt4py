@@ -20,7 +20,6 @@ import types
 import warnings
 import weakref
 from collections.abc import Callable, Hashable, Sequence
-from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Generic, TypeAlias, TypeVar
 
 from gt4py._core import definitions as core_defs
@@ -186,7 +185,6 @@ def wait_for_compilation() -> None:
     failures: list[tuple[str, BaseException]] = []
     for future, label in list(_ongoing_compilations.items()):
         if (error := future.exception()) is not None:  # waits for completion
-            runners.add_hint_to_broken_pool_error(error)
             failures.append((label, error))
         del _ongoing_compilations[future]
     if len(failures) == 1:
@@ -491,11 +489,7 @@ class CompiledProgramsPool(Generic[ffront_stages.DSLDefinitionT]):
     def _load_artifact(
         self, artifact_future: concurrent.futures.Future[artifacts.CompilationArtifact]
     ) -> artifacts.ExecutableProgram:
-        try:
-            artifact = artifact_future.result()  # re-raises errors from the compilation worker
-        except BrokenProcessPool as error:
-            runners.add_hint_to_broken_pool_error(error)
-            raise
+        artifact = artifact_future.result()  # re-raises errors from the compilation worker
         try:
             return self.backend.load_artifact(artifact)
         except Exception as e:

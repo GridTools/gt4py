@@ -13,7 +13,6 @@ import gc
 import traceback
 import warnings
 import weakref
-from concurrent.futures.process import BrokenProcessPool
 
 import numpy as np
 import pytest
@@ -561,34 +560,6 @@ def test_python_debug_mode_warning_is_opt_in(testee_prog, noop_runner, monkeypat
     caught = _compile_and_collect_warnings(testee_prog)
 
     assert len([w for w in caught if "optimized mode" in str(w.message)]) == 1
-
-
-def test_broken_process_pool_error_gets_a_hint():
-    error = BrokenProcessPool("boom")
-
-    runners.add_hint_to_broken_pool_error(error)
-    runners.add_hint_to_broken_pool_error(error)  # idempotent: the error is shared by all futures
-
-    assert len(error.__notes__) == 1
-    assert "__main__" in error.__notes__[0]
-
-
-def test_hint_is_only_added_to_broken_process_pool_errors():
-    error = ValueError("boom")
-
-    runners.add_hint_to_broken_pool_error(error)
-
-    assert not hasattr(error, "__notes__")
-
-
-def test_load_artifact_hints_at_broken_process_pool(testee_prog):
-    future = concurrent.futures.Future()
-    future.set_exception(BrokenProcessPool("boom"))
-
-    with pytest.raises(BrokenProcessPool) as exc_info:
-        testee_prog._compiled_programs._load_artifact(future)
-
-    assert any("__main__" in note for note in exc_info.value.__notes__)
 
 
 def test_dispatch_miss_without_argument_descriptors(testee_prog):

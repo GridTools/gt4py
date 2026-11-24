@@ -20,7 +20,6 @@ import pickle
 import sys
 import threading
 import warnings
-from concurrent.futures.process import BrokenProcessPool
 from typing import Any, Callable, Protocol, runtime_checkable
 
 from gt4py._core import definitions as core_defs
@@ -184,37 +183,6 @@ def _run_compilation_task_in_worker(
     return executor(compilable)
 
 
-_BROKEN_POOL_HINT = (
-    "A compilation worker process terminated abruptly. If this happens in a plain "
-    "script that calls a compiled program at module level, guard the entry point of "
-    'the script with `if __name__ == "__main__":` (the workers import the main '
-    "module); alternatively set `GT4PY_BUILD_JOBS_MODE=serial` to compile in the "
-    "calling process."
-)
-
-
-def add_hint_to_broken_pool_error(error: BaseException) -> None:
-    """Add a note with the usual causes to a `BrokenProcessPool` error (in place).
-
-    Other exceptions, and errors already carrying the hint, are left untouched.
-    """
-    if isinstance(error, BrokenProcessPool) and (
-        _BROKEN_POOL_HINT not in getattr(error, "__notes__", ())
-    ):
-        error.add_note(_BROKEN_POOL_HINT)
-
-
-def _is_importing_main_module_in_child_process() -> bool:
-    """Whether this is a child process that is still importing the parent's `__main__`.
-
-    ``spawn`` and ``forkserver`` children (the compilation workers, or any other
-    process started by the script) re-import the main module of the parent before
-    they are flagged as child processes (`multiprocessing.parent_process()` is still
-    `None`). This is the flag the stdlib itself checks in `_check_not_importing_main`.
-    """
-    return getattr(multiprocessing.current_process(), "_inheriting", False)
-
-
 class ProcessRunner:
     """Compiles in a ``ProcessPoolExecutor`` (``spawn``).
 
@@ -270,27 +238,17 @@ class ProcessRunner:
             future.set_exception(error)
             return future
 
-        # Checked here, where worker processes get started, not at construction:
-        # creating a runner while importing `__main__` in a child process is harmless.
-        if _is_importing_main_module_in_child_process():
-            raise RuntimeError(
-                f"Compilation of '{task.name}' was started while a child process (e.g. a "
-                "GT4Py compilation worker) was importing the main module of the script. Guard "
-                'the entry point of the script with `if __name__ == "__main__":` so that '
-                "programs are only called in the main process (or set "
-                "`GT4PY_BUILD_JOBS_MODE=serial`)."
-            )
-        try:
-            return self._pool.submit(
-                _run_compilation_task_in_worker,
-                executor_blob=executor_blob,
-                compilable_blob=compilable_blob,
-                config_overrides=_config_snapshot(),
-                recursion_limit=sys.getrecursionlimit(),
-            )
-        except BrokenProcessPool as error:
-            add_hint_to_broken_pool_error(error)
-            raise
+        # TODO(egparedes): a script calling a program at module level without an
+        #   `if __name__ == "__main__":` guard breaks the pool with an unhelpful
+        #   `BrokenProcessPool` (the spawned workers re-import `__main__`).
+        #   See https://github.com/GridTools/gt4py/issues/3036.
+        return self._pool.submit(
+            _run_compilation_task_in_worker,
+            executor_blob=executor_blob,
+            compilable_blob=compilable_blob,
+            config_overrides=_config_snapshot(),
+            recursion_limit=sys.getrecursionlimit(),
+        )
 
     def shutdown(self, wait: bool = True) -> None:
         self._pool.shutdown(wait=wait)
@@ -329,15 +287,9 @@ def get_default_runner() -> Runner:
     """
     global _default_runner
     with _default_runner_lock:
-        if _default_runner is not None:
-            return _default_runner
-        runner = SerialRunner() if _is_worker_process() else from_config()
-        # A child process importing `__main__` is not flagged as a worker yet: do not
-        # keep a process runner made for that phase (its `submit` refuses to start
-        # anyway), so that the child gets a serial one once it is set up.
-        if not (isinstance(runner, ProcessRunner) and _is_importing_main_module_in_child_process()):
-            _default_runner = runner
-        return runner
+        if _default_runner is None:
+            _default_runner = SerialRunner() if _is_worker_process() else from_config()
+        return _default_runner
 
 
 def reset_default_runner() -> None:

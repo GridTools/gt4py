@@ -13,10 +13,8 @@ import hashlib
 import multiprocessing
 import os
 import pickle
-import subprocess
 import sys
 import unittest.mock as mock
-from concurrent.futures.process import BrokenProcessPool
 
 import numpy as np
 import pytest
@@ -505,22 +503,6 @@ def test_wait_for_compilation_groups_multiple_failures():
     compiled_program.wait_for_compilation()
 
 
-def test_wait_for_compilation_hints_at_broken_process_pool():
-    # A broken pool fails all its futures with the same exception instance.
-    error = BrokenProcessPool("boom")
-    futures = [concurrent.futures.Future() for _ in range(2)]
-    for i, future in enumerate(futures):
-        future.set_exception(error)
-        compiled_program._ongoing_compilations[future] = f"testee_{i} (backend)"
-
-    with pytest.raises(ExceptionGroup) as exc_info:
-        compiled_program.wait_for_compilation()
-
-    assert all(e is error for e in exc_info.value.exceptions)
-    assert len(error.__notes__) == 1  # added once, although reported twice
-    assert 'if __name__ == "__main__"' in error.__notes__[0]
-
-
 def test_wait_for_compilation_drains_foreign_entries():
     """Pin the leak the `isolate_ongoing_compilations` fixture exists to contain.
 
@@ -627,104 +609,3 @@ def test_default_runner_is_serial_in_worker_process():
         runners.reset_default_runner()
         assert isinstance(runners.get_default_runner(), runners.SerialRunner)
         runners.reset_default_runner()
-
-
-def test_default_runner_made_while_a_child_imports_main_is_not_kept(monkeypatch):
-    """The runner made before the child is flagged as a worker must not stay the default."""
-    monkeypatch.setattr(config, "BUILD_JOBS_MODE", config.BuildJobsMode.PROCESS)
-    runners.reset_default_runner()
-    try:
-        with mock.patch.object(multiprocessing.current_process(), "_inheriting", True, create=True):
-            assert isinstance(runners.get_default_runner(), runners.ProcessRunner)
-        with mock.patch.object(multiprocessing, "parent_process", return_value=mock.Mock()):
-            assert isinstance(runners.get_default_runner(), runners.SerialRunner)
-    finally:
-        runners.reset_default_runner()
-
-
-def test_default_thread_runner_made_while_a_child_imports_main_is_kept(monkeypatch):
-    """Only process runners are discarded: other runners must not pile up."""
-    monkeypatch.setattr(config, "BUILD_JOBS_MODE", config.BuildJobsMode.THREAD)
-    runners.reset_default_runner()
-    try:
-        with mock.patch.object(multiprocessing.current_process(), "_inheriting", True, create=True):
-            assert runners.get_default_runner() is runners.get_default_runner()
-    finally:
-        runners.reset_default_runner()
-
-
-def test_process_runner_submit_hints_at_broken_pool(process_runner):
-    broken_pool = mock.Mock(submit=mock.Mock(side_effect=BrokenProcessPool("boom")))
-    with mock.patch.object(process_runner, "_pool", broken_pool):
-        with pytest.raises(BrokenProcessPool) as exc_info:
-            process_runner.submit(_decomposed_task(executor=_RecursingExecutor(0)))
-
-    assert any('if __name__ == "__main__"' in note for note in exc_info.value.__notes__)
-
-
-def test_process_runner_refuses_to_submit_while_a_child_imports_main(process_runner, monkeypatch):
-    monkeypatch.setattr(multiprocessing.current_process(), "_inheriting", True, raising=False)
-
-    with pytest.raises(RuntimeError, match=r'if __name__ == "__main__"'):
-        process_runner.submit(_decomposed_task(executor=_RecursingExecutor(0)))
-
-
-def test_process_runner_can_be_created_while_a_child_imports_main(tmp_path, monkeypatch):
-    """Only starting a compilation is refused: a module-level runner is harmless."""
-    monkeypatch.setattr(multiprocessing.current_process(), "_inheriting", True, raising=False)
-
-    runners.ProcessRunner(max_workers=1, shared_session_cache_dir=str(tmp_path)).shutdown()
-
-
-_SCRIPT_TEMPLATE = """
-from gt4py.next.otf import compiled_program, runners
-
-
-def executor(compilable):
-    raise AssertionError("executor ran in the worker")
-
-
-task = runners.CompilationTask(name="t", compilable=None, executor=executor)
-{call}
-"""
-
-# What calling a compiled program does: submit to the default runner, then wait.
-_COMPILE_AND_WAIT = """\
-future = runners.get_default_runner().submit(task)
-compiled_program._ongoing_compilations[future] = "t"
-compiled_program.wait_for_compilation()"""
-
-
-@pytest.mark.parametrize("guarded", [False, True], ids=["unguarded", "guarded"])
-def test_unguarded_script_fails_with_a_clear_message(tmp_path, guarded):
-    """A script compiling at module level is re-imported by every spawned worker.
-
-    The worker must fail with an actionable error instead of the bare
-    `RuntimeError: ... bootstrapping phase`, and the `BrokenProcessPool` that the
-    script then gets must carry a hint at the missing guard.
-    """
-    call = _COMPILE_AND_WAIT
-    if guarded:
-        call = 'if __name__ == "__main__":\n' + "\n".join("    " + l for l in call.splitlines())
-    script = tmp_path / "script.py"
-    script.write_text(_SCRIPT_TEMPLATE.format(call=call))
-
-    result = subprocess.run(
-        [sys.executable, str(script)],
-        capture_output=True,
-        text=True,
-        timeout=300,
-        cwd=tmp_path,
-        env={**os.environ, "GT4PY_BUILD_JOBS_MODE": "process", "GT4PY_BUILD_JOBS": "1"},
-    )
-
-    assert "bootstrapping phase" not in result.stderr
-    if guarded:
-        # The worker imports the script without calling anything; the task itself
-        # then fails with the executor's own error, which is propagated unchanged.
-        assert "AssertionError: executor ran in the worker" in result.stderr
-    else:
-        assert result.returncode != 0
-        assert "RuntimeError: Compilation of 't' was started while a child process" in result.stderr
-        assert "BrokenProcessPool" in result.stderr
-        assert "A compilation worker process terminated abruptly" in result.stderr  # the hint
