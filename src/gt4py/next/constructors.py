@@ -274,9 +274,10 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
         *,
         dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
-        return self.array_ns.empty(
-            domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
-        )
+        with core_ndarray_utils.device_context(self.device):
+            return self.array_ns.empty(
+                domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
+            )
 
     def zeros(
         self,
@@ -284,9 +285,10 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
         *,
         dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
-        return self.array_ns.zeros(
-            domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
-        )
+        with core_ndarray_utils.device_context(self.device):
+            return self.array_ns.zeros(
+                domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
+            )
 
     def ones(
         self,
@@ -294,9 +296,10 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
         *,
         dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
-        return self.array_ns.ones(
-            domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
-        )
+        with core_ndarray_utils.device_context(self.device):
+            return self.array_ns.ones(
+                domain.shape, dtype=self._to_array_ns_dtype(dtype), device=self.device
+            )
 
     def full(
         self,
@@ -305,12 +308,13 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
         *,
         dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
-        return self.array_ns.full(
-            domain.shape,
-            fill_value=fill_value,
-            dtype=self._to_array_ns_dtype(dtype),
-            device=self.device,
-        )
+        with core_ndarray_utils.device_context(self.device):
+            return self.array_ns.full(
+                domain.shape,
+                fill_value=fill_value,
+                dtype=self._to_array_ns_dtype(dtype),
+                device=self.device,
+            )
 
     def asarray(
         self,
@@ -319,9 +323,10 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
         *,
         dtype: core_defs.DType,
     ) -> core_defs.NDArrayObject:
-        arr = self.array_ns.asarray(
-            data, dtype=self._to_array_ns_dtype(dtype), device=self.device, copy=True
-        )
+        with core_ndarray_utils.device_context(self.device):
+            arr = self.array_ns.asarray(
+                data, dtype=self._to_array_ns_dtype(dtype), device=self.device, copy=True
+            )
         assert domain.shape == arr.shape, (
             f"pre-condition of `asarray` not met: {data.shape=} and {domain.shape} need to agree."
         )
