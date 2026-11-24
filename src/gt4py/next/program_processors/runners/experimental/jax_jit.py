@@ -18,18 +18,13 @@ from __future__ import annotations
 import dataclasses
 import inspect
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any
+from typing import Any
 
 import jax
 import jax.numpy as jnp
 
 from gt4py.next import backend as next_backend, common
 from gt4py.next.embedded import nd_array_field
-from gt4py.next.program_processors.runners.experimental import embedded_jit
-
-
-if TYPE_CHECKING:
-    from gt4py.next.ffront import decorator
 
 
 def _is_field(x: Any) -> bool:
@@ -78,7 +73,7 @@ def _assignable_fields(tree: Any) -> list[nd_array_field.NdArrayField]:
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class JaxJitBackend(next_backend.EmbeddedJitBackend):
+class JaxJitBackend(next_backend.EmbeddedBackend):
     """
     Runs programs and field operators embedded, under `jax.jit`.
 
@@ -88,10 +83,7 @@ class JaxJitBackend(next_backend.EmbeddedJitBackend):
     field in the trace, so its aliases see the assignment.
     """
 
-    def jit(self, entry_point: decorator.GTEntryPoint) -> Callable[..., None]:
-        return embedded_jit.jit(entry_point, self._wrap)
-
-    def _wrap(
+    def wrap(
         self,
         entry: Callable[..., None],
         signature: inspect.Signature,

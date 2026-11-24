@@ -103,14 +103,14 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     @functools.cached_property
     def _has_compiled_backend(self) -> bool:
         return self.backend is not None and not isinstance(
-            self.backend, next_backend.EmbeddedJitBackend
+            self.backend, next_backend.EmbeddedBackend
         )
 
     @functools.cached_property
-    def _embedded_jit(self) -> Callable[..., None]:
-        """This entry point run embedded inside the tracing compiler of its embedded jit backend."""
-        assert isinstance(self.backend, next_backend.EmbeddedJitBackend)
-        return self.backend.jit(typing.cast(GTEntryPoint, self))
+    def _embedded_runner(self) -> Callable[..., None]:
+        """This entry point run by its embedded backend."""
+        assert isinstance(self.backend, next_backend.EmbeddedBackend)
+        return self.backend.runner(typing.cast(GTEntryPoint, self))
 
     @abc.abstractmethod
     def __gt_type__(self) -> ts.CallableType: ...
@@ -376,9 +376,9 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                 self._compiled_programs(
                     *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
                 )
-            elif isinstance(self.backend, next_backend.EmbeddedJitBackend):
+            elif isinstance(self.backend, next_backend.EmbeddedBackend):
                 with embedded_program_call_context(self, args, offset_provider, kwargs):
-                    self._embedded_jit(*args, offset_provider=offset_provider, **kwargs)
+                    self._embedded_runner(*args, offset_provider=offset_provider, **kwargs)
             else:
                 # Embedded execution.
                 warnings.warn(
@@ -574,8 +574,8 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
             if not embedded_context.within_valid_context():
                 # field_operator as program
                 kwargs["offset_provider"] = {**kwargs.pop("offset_provider", {})}
-                if isinstance(self.backend, next_backend.EmbeddedJitBackend):
-                    return self._embedded_jit(*args, **kwargs)
+                if isinstance(self.backend, next_backend.EmbeddedBackend):
+                    return self._embedded_runner(*args, **kwargs)
             attributes = (
                 self.definition_stage.attributes
                 if self.definition_stage

@@ -6,7 +6,7 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""What the embedded jit backends add to embedded execution; the integration matrix runs the features."""
+"""What the embedded backends add to embedded execution; the integration matrix runs the features."""
 
 import dataclasses
 import re
@@ -169,8 +169,8 @@ def _e2v(device, table=E2V_TABLE):
 
 
 def _jitted(entry_point):
-    """The `jax.jit` object, under the call adapter of `embedded_jit` and the write-back of `jax_jit`."""
-    return entry_point._embedded_jit.__wrapped__.__wrapped__
+    """The `jax.jit` object, under the call adapter of `embedded` and the write-back of `jax_jit`."""
+    return entry_point._embedded_runner.__wrapped__.__wrapped__
 
 
 def test_out_assigned_in_the_callers_field(device, backend):
@@ -299,6 +299,76 @@ def test_missing_out_is_rejected(device, backend):
         scale.with_backend(backend)(
             _field(device, np.arange(3.0), [IDim]), int32(1), offset_provider={}
         )
+
+
+def test_backend_allocates_arrays_of_its_library(library, backend):
+    field = gtx.zeros(gtx.domain({IDim: 3}), allocator=backend)
+
+    if library == "jax":
+        import jax
+
+        assert isinstance(field.ndarray, jax.Array)
+    else:
+        import torch
+
+        assert isinstance(field.ndarray, torch.Tensor)
+
+
+@pytest.mark.requires_torch
+@pytest.mark.requires_gpu
+def test_torch_compile_allocates_on_the_given_device():
+    from gt4py._core import definitions as core_defs
+    from gt4py.next.program_processors.runners.experimental import torch_compile
+
+    field = gtx.zeros(
+        gtx.domain({IDim: 3}),
+        allocator=torch_compile.torch_compile,
+        device=core_defs.Device(core_defs.DeviceType.CUDA, 0),
+    )
+
+    assert field.ndarray.is_cuda
+
+
+@pytest.fixture(
+    params=[
+        "numpy",
+        pytest.param("cupy", marks=pytest.mark.requires_gpu),
+        pytest.param("jax", marks=pytest.mark.requires_jax),
+        pytest.param("torch", marks=pytest.mark.requires_torch),
+    ]
+)
+def eager_backend(request):
+    from gt4py.next import experimental
+
+    return getattr(experimental, f"embedded_{request.param}")
+
+
+def test_eager_backend_runs_on_the_arrays_it_allocates(eager_backend):
+    domain = gtx.domain({IDim: 3})
+    a = gtx.as_field(domain, np.arange(3.0), allocator=eager_backend)
+    b = gtx.as_field(domain, np.zeros(3), allocator=eager_backend)
+    out = gtx.zeros(domain, allocator=eager_backend)
+
+    write_then_read.with_backend(eager_backend)(a, b, out, offset_provider={})
+
+    assert type(out.ndarray) is type(eager_backend.allocator.zeros(1))
+    np.testing.assert_array_equal(a.asnumpy(), np.arange(3.0) + 1.0)
+    np.testing.assert_array_equal(out.asnumpy(), np.zeros(3))
+
+
+def test_eager_backend_runs_field_operators(eager_backend):
+    domain = gtx.domain({IDim: 3})
+    f = gtx.as_field(domain, np.arange(3.0), allocator=eager_backend)
+    out = gtx.zeros(domain, allocator=eager_backend)
+
+    plus_one.with_backend(eager_backend)(f, out=out, domain={IDim: (1, 3)}, offset_provider={})
+
+    np.testing.assert_array_equal(out.asnumpy(), [0.0, 2.0, 3.0])
+
+
+def test_eager_backend_does_not_compile(eager_backend):
+    with pytest.raises(RuntimeError, match="does not compile"):
+        edge_sum_program.with_backend(eager_backend).compile(offset_provider={"E2V": None})
 
 
 def test_exported_from_experimental(library, backend):
