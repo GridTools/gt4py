@@ -8,9 +8,9 @@
 
 from __future__ import annotations
 
-import abc
 import dataclasses
-from collections.abc import Callable
+import inspect
+from collections.abc import Callable, Sequence
 from typing import TYPE_CHECKING, Any, Generic
 
 from gt4py._core import definitions as core_defs
@@ -181,17 +181,17 @@ class Backend(Generic[core_defs.DeviceTypeT]):
 
 
 def _not_compiled(*args: Any, **kwargs: Any) -> Any:
-    raise RuntimeError("An embedded jit backend runs programs embedded; it does not compile them.")
+    raise RuntimeError("An embedded backend runs programs embedded; it does not compile them.")
 
 
 @dataclasses.dataclass(frozen=True, kw_only=True)
-class EmbeddedJitBackend(Backend, abc.ABC):
+class EmbeddedBackend(Backend):
     """
-    Runs programs and field operators embedded, inside the tracing compiler of an array library.
+    Runs programs and field operators embedded, on the arrays its allocator allocates.
 
-    Instead of compiling, it wraps the embedded execution of a program or field operator once,
-    e.g. in `jax.jit`. The allocator allocates arrays of the library. A stopgap until embedded
-    execution is represented by backends.
+    It does not compile. Subclasses run the embedded execution inside the tracing compiler of
+    the array library, e.g. `jax.jit`, by overriding `wrap`. A stopgap until embedded execution
+    is represented by backends.
     """
 
     executor: workflow.Workflow[stages.CompilableProgramDef, artifacts.CompilationArtifact] = (
@@ -201,14 +201,26 @@ class EmbeddedJitBackend(Backend, abc.ABC):
         DEFAULT_TRANSFORMS
     )
 
-    @abc.abstractmethod
-    def jit(self, entry_point: ffront_decorator.GTEntryPoint) -> Callable[..., None]:
+    def runner(self, entry_point: ffront_decorator.GTEntryPoint) -> Callable[..., None]:
         """
-        `entry_point` run embedded inside the tracing compiler, called as the entry point is.
+        `entry_point` run embedded, wrapped by `wrap`, called as the entry point is.
 
         Called once per entry point: the result is cached by it.
         """
-        ...
+        from gt4py.next.program_processors.runners.experimental import embedded
+
+        return embedded.runner(entry_point, self.wrap)
+
+    def wrap(
+        self, entry: Callable[..., None], signature: inspect.Signature, static_params: Sequence[str]
+    ) -> Callable[..., None]:
+        """
+        `entry`, the embedded execution called as `signature` describes, in a tracing compiler.
+
+        The parameters `static_params` are static. The arguments are fields, connectivities,
+        scalars and (nested) tuples of them.
+        """
+        return entry
 
 
 @dataclasses.dataclass(frozen=True)

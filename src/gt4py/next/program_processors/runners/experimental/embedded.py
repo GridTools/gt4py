@@ -6,17 +6,13 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-"""
-What the embedded jit backends share: the embedded execution of an entry point, as they wrap it.
-
-A stopgap until embedded execution is represented by backends.
-"""
+"""The embedded execution of an entry point, as the embedded backends run it."""
 
 from __future__ import annotations
 
 import inspect
 from collections.abc import Callable, Sequence
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import TYPE_CHECKING, Any
 
 from gt4py.next import common, errors, named_collections, utils
 from gt4py.next.embedded import context as embedded_context
@@ -29,16 +25,11 @@ if TYPE_CHECKING:
     from gt4py.next.ffront import decorator
 
 
-#: Wraps the embedded execution, called as the signature describes, in a tracing compiler, with
-#: the named parameters static. The arguments are fields, connectivities, scalars and (nested)
-#: tuples of them.
-Wrap: TypeAlias = Callable[
-    [Callable[..., None], inspect.Signature, Sequence[str]], Callable[..., None]
-]
-
-
-def jit(entry_point: decorator.GTEntryPoint, wrap: Wrap) -> Callable[..., None]:
-    """`entry_point` run embedded in the tracing compiler of `wrap`, called as the entry point is."""
+def runner(
+    entry_point: decorator.GTEntryPoint,
+    wrap: Callable[[Callable[..., None], inspect.Signature, Sequence[str]], Callable[..., None]],
+) -> Callable[..., None]:
+    """`entry_point` run embedded, wrapped by `wrap`, called as the entry point is."""
     callable_type = entry_point.__gt_type__()
     program_type = ffront_type_info.type_in_program_context(callable_type)
     assert isinstance(program_type, ts_ffront.ProgramType)
