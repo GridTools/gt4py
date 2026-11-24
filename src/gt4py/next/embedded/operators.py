@@ -9,11 +9,13 @@
 import dataclasses
 from typing import Any, Callable, Generic, Optional, ParamSpec, Sequence, TypeVar
 
+from typing_extensions import TypeIs
+
 from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import xtyping
 from gt4py.next import common, errors, field_utils, named_collections, utils
-from gt4py.next.embedded import common as embedded_common, context as embedded_context
+from gt4py.next.embedded import array_ops, common as embedded_common, context as embedded_context
 from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -76,7 +78,7 @@ class ScanOperator(EmbeddedOperator[xtyping.MaybeNestedInTuple[core_defs.ScalarT
                 # convert custom NamedCollections to plain tuples for assignment
                 acc_extracted = arguments.extract(acc)
                 res_extracted = arguments.extract(res)
-                assert xtyping.is_maybe_nested_in_tuple_of(acc_extracted, core_defs.Scalar)  # type: ignore[arg-type]  # Scalar is a Union
+                assert _is_maybe_nested_in_tuple_of_scalars(acc_extracted)
                 assert xtyping.is_maybe_nested_in_tuple_of(res_extracted, common.MutableField)  # type: ignore[type-abstract]  # MutableField is abstract/generic
                 _tuple_assign_value(pos, res_extracted, acc_extracted)
 
@@ -161,7 +163,7 @@ def _tuple_assign_field(
         if isinstance(source, common.Field):
             target[domain] = source[domain]
         else:
-            assert core_defs.is_scalar_type(source)
+            assert array_ops.is_scalar_like(source)
             target[domain] = source
 
     if not isinstance(domain, tuple):
@@ -177,13 +179,20 @@ def _intersect_scan_args(
     )
 
 
+def _is_maybe_nested_in_tuple_of_scalars(
+    value: object,
+) -> TypeIs[xtyping.MaybeNestedInTuple[array_ops.NDValue]]:
+    """Scalars or 0-d arrays, or (nested) tuples of them."""
+    return all(array_ops.is_scalar_like(v) for v in utils.flatten_nested_tuple((value,)))
+
+
 def _tuple_assign_value(
     pos: Sequence[common.NamedIndex],
     target: xtyping.MaybeNestedInTuple[common.MutableField],
-    source: xtyping.MaybeNestedInTuple[core_defs.Scalar],
+    source: xtyping.MaybeNestedInTuple[array_ops.NDValue],
 ) -> None:
     @utils.tree_map
-    def impl(target: common.MutableField, source: core_defs.Scalar) -> None:
+    def impl(target: common.MutableField, source: array_ops.NDValue) -> None:
         target[pos] = source
 
     impl(target, source)
@@ -191,12 +200,12 @@ def _tuple_assign_value(
 
 def _tuple_at(
     pos: Sequence[common.NamedIndex],
-    field: xtyping.MaybeNestedInTuple[common.Field | core_defs.Scalar],
-) -> core_defs.Scalar | tuple[core_defs.ScalarT | tuple, ...]:
+    field: xtyping.MaybeNestedInTuple[common.Field | array_ops.NDValue],
+) -> array_ops.NDValue | tuple[array_ops.NDValue | tuple, ...]:
     @named_collections.tree_map_named_collection
-    def impl(field: common.Field | core_defs.Scalar) -> core_defs.Scalar:
+    def impl(field: common.Field | array_ops.NDValue) -> array_ops.NDValue:
         res = field[pos].as_scalar() if isinstance(field, common.Field) else field
-        assert core_defs.is_scalar_type(res)
+        assert array_ops.is_scalar_like(res)
         return res
 
     return impl(field)  # type: ignore[return-value]

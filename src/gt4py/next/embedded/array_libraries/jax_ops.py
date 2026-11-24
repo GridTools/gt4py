@@ -9,8 +9,9 @@
 """
 `ArrayOps` for JAX arrays, and the embedded fields as JAX pytrees.
 
-Everything gt4py knows about JAX tracing is in this module (ADR 0029). A
-connectivity table inside a trace is a tracer, and one of two cases:
+How embedded fields and connectivities behave under JAX tracing is in this module
+(ADR 0029); `runners.experimental.jax_jit` runs programs under `jax.jit`. A connectivity table
+inside a trace is a tracer, and one of two cases:
 
 - it stands for a concrete table, which it got as a pytree leaf, or it was
   restricted from such a tracer: its static values are a NumPy view of the
@@ -138,6 +139,10 @@ class JaxOps(array_ops.ArrayOps):
     ) -> core_defs.NDArrayObject:
         return jnp.take(array, indices, axis=axis, mode="clip")
 
+    def scalar(self, array: core_defs.NDArrayObject) -> Any:
+        # a traced element stays a 0-d tracer: its value is only known at run time
+        return super().scalar(array) if _is_concrete(array) else array
+
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.asarray(array)
 
@@ -244,3 +249,6 @@ jax.tree_util.register_pytree_node(
     _flatten_connectivity,
     _unflatten_connectivity,
 )
+
+# e.g. the `Dimension`s of an offset provider in the arguments of `jax.jit`
+jax.tree_util.register_static(common.Dimension)

@@ -72,7 +72,7 @@ extensions = [
 ]
 
 # Add any paths that contain templates here, relative to this directory.
-templates_path = ["_templates"]
+# templates_path: see the shared theme settings below
 
 # The suffix(es) of source filenames.
 # You can specify multiple suffix as a list of string:
@@ -110,7 +110,7 @@ autodoc_default_options = {
     "special-members": "__call__",
     "undoc-members": True,
 }
-autodoc_mock_imports = ["dace", "sympy"]
+autodoc_mock_imports: list[str] = []
 
 # ---- Options for intersphinx extension
 intersphinx_mapping = {
@@ -142,33 +142,21 @@ todo_include_todos = False
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
 # a list of builtin themes.
-# alabaster, classic, pyramid, sphinx_rtd_theme
-html_theme = "sphinx_rtd_theme"
-html_logo = "_static/logo.svg"
+# Theme settings shared by all the sites of the GT4Py documentation
+sys.path.insert(0, os.path.join(docs_root_dir, "user"))
+from site_theme import theme_settings  # noqa: E402 [module-import-not-at-top-of-file]
 
-# Theme options are theme-specific and customize the look and feel of a theme
-# further.  For a list of options available for each theme, see the
-# documentation.
-#
-html_theme_options = {
-    "canonical_url": "",
-    "analytics_id": "",
-    "logo_only": False,
-    "display_version": True,
-    "prev_next_buttons_location": "bottom",
-    "style_external_links": False,
-    # Toc options
-    "collapse_navigation": True,
-    "sticky_navigation": True,
-    "navigation_depth": 4,
-    "includehidden": True,
-    "titles_only": False,
-}
-
-# Add any paths that contain custom static files (such as style sheets) here,
-# relative to this directory. They are copied after the builtin static files,
-# so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ["_static"]
+globals().update(
+    theme_settings(
+        __file__,
+        title="GT4Py Cartesian",
+        # Links to the other sites: (title, path relative to the root of this site)
+        site_links=[
+            ("Home", "../index.html"),
+            ("gt4py.next", "../next/index.html"),
+        ],
+    )
+)
 
 # Custom sidebar templates, must be a dictionary that maps document names
 # to template names.
@@ -235,7 +223,3 @@ texinfo_documents = [
         "Miscellaneous",
     )
 ]
-
-
-def setup(sphinx):
-    sphinx.add_css_file("css/cscs.css")

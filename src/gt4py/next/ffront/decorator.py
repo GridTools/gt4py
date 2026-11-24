@@ -22,17 +22,16 @@ from collections.abc import Callable
 from typing import Any, Generic, Optional, Self, Sequence, TypeAlias, Unpack, override
 
 from gt4py import eve
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.eve import xtyping
 from gt4py.next import (
     backend as next_backend,
     common,
     custom_layout_allocators as next_allocators,
-    embedded as next_embedded,
     errors,
     utils,
 )
-from gt4py.next.embedded import operators as embedded_operators
+from gt4py.next.embedded import context as embedded_context, operators as embedded_operators
 from gt4py.next.ffront import (
     field_operator_ast as foast,
     foast_to_gtir,
@@ -100,6 +99,18 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     )
     compilation_options: options.CompilationOptions
 
+    @functools.cached_property
+    def _has_compiled_backend(self) -> bool:
+        return self.backend is not None and not isinstance(
+            self.backend, next_backend.EmbeddedBackend
+        )
+
+    @functools.cached_property
+    def _embedded_runner(self) -> Callable[..., None]:
+        """This entry point run by its embedded backend."""
+        assert isinstance(self.backend, next_backend.EmbeddedBackend)
+        return self.backend.runner(typing.cast(GTEntryPoint, self))
+
     @abc.abstractmethod
     def __gt_type__(self) -> ts.CallableType: ...
 
@@ -132,6 +143,10 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     ) -> compiled_program.CompiledProgramsPool:
         if self.backend is None or self.backend == eve.NOTHING:
             raise RuntimeError("Cannot compile a program without backend.")
+        if not self._has_compiled_backend:
+            raise RuntimeError(
+                f"Backend '{self.backend.name}' runs programs embedded; it does not compile them."
+            )
 
         program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
         assert isinstance(program_type, ts_ffront.ProgramType)
@@ -183,20 +198,18 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
                 static_domains=self.compilation_options.static_domains,
             )
 
-        if self.compilation_options.connectivities is None and offset_provider is None:
-            raise ValueError(
-                "Cannot compile a program without connectivities / OffsetProviderType."
-            )
+        # TODO(havogt): explicitly check that the offset provider contains all connectivities
+        #  required by this program, instead of failing in the (possibly asynchronous)
+        #  compilation.
+        if offset_provider is None:
+            offset_provider = self.compilation_options.connectivities or {}
         if not all(isinstance(v, list) for v in static_args.values()):
             raise TypeError(
                 "Please provide the static arguments as lists."
             )  # To avoid confusion with tuple args
 
-        offset_provider = (
-            self.compilation_options.connectivities if offset_provider is None else offset_provider
-        )
         if not isinstance(offset_provider, list):
-            offset_provider = [offset_provider]  # type: ignore[list-item] # cleanup offset_provider vs offset_provider_type
+            offset_provider = [offset_provider]
 
         assert all(
             common.is_offset_provider(op) or common.is_offset_provider_type(op)
@@ -271,7 +284,10 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     @functools.cached_property
     def __gt_allocator__(
         self,
-    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+    ) -> (
+        next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
+        | core_ndarray_utils.ArrayNamespace
+    ):
         if self.backend:
             return self.backend.__gt_allocator__
         else:
@@ -358,13 +374,16 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                     kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
                 )
 
-            if self.backend is not None:
+            if self._has_compiled_backend:
                 self._compiled_programs(
                     *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
                 )
+            elif isinstance(self.backend, next_backend.EmbeddedBackend):
+                with embedded_program_call_context(self, args, offset_provider, kwargs):
+                    self._embedded_runner(*args, offset_provider=offset_provider, **kwargs)
             else:
                 # Embedded execution.
-                with next_embedded.context.update(offset_provider=offset_provider):
+                with embedded_context.update(offset_provider=offset_provider):
                     with embedded_program_call_context(self, args, offset_provider, kwargs):
                         self.definition_stage.definition(*args, **kwargs)
 
@@ -525,7 +544,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
         return self.foast_stage.closure_vars
 
     def __call__(self, *args: Any, enable_jit: bool | None = None, **kwargs: Any) -> Any:
-        if not next_embedded.context.within_valid_context() and self.backend is not None:
+        if not embedded_context.within_valid_context() and self._has_compiled_backend:
             # non embedded execution
             offset_provider = {**kwargs.pop("offset_provider", {})}
             if "out" not in kwargs:
@@ -547,9 +566,11 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
                 else enable_jit,
             )
         else:
-            if not next_embedded.context.within_valid_context():
+            if not embedded_context.within_valid_context():
                 # field_operator as program
                 kwargs["offset_provider"] = {**kwargs.pop("offset_provider", {})}
+                if isinstance(self.backend, next_backend.EmbeddedBackend):
+                    return self._embedded_runner(*args, **kwargs)
             attributes = (
                 self.definition_stage.attributes
                 if self.definition_stage
@@ -708,7 +729,7 @@ def scan_operator(
         definition: Function from scalars to a scalar.
 
     Keyword Arguments:
-        axis: A :ref:`Dimension` to reduce over.
+        axis: A `Dimension` to reduce over.
         forward: Boolean specifying the direction.
         init: Initial value for the carry argument of the scan pass.
 

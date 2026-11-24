@@ -38,9 +38,10 @@ from .common import (
     unit_range,
 )
 from .constructors import FieldConstructor, as_connectivity, as_field, empty, full, ones, zeros
-from .embedded import (  # Just for registering field implementations
-    nd_array_field as _nd_array_field,
-)
+
+# for their side effects: the field implementation, and the `ArrayOps` and pytrees of the
+# installed array libraries
+from .embedded import array_libraries as _array_libraries, nd_array_field as _nd_array_field
 from .ffront import fbuiltins
 from .ffront.decorator import field_operator, program, scan_operator
 from .ffront.fbuiltins import (
@@ -97,6 +98,7 @@ from .ffront.fbuiltins import (
     where,
 )
 from .otf.compiled_program import wait_for_compilation
+from .program_processors.runners.dace import run_dace_cpu as dace_cpu, run_dace_gpu as dace_gpu
 from .program_processors.runners.gtfn import run_gtfn as gtfn_cpu, run_gtfn_gpu as gtfn_gpu
 from .program_processors.runners.roundtrip import default as itir_python
 
@@ -146,6 +148,8 @@ __all__ = [  # noqa: RUF022 [unsorted-dunder-all]
     # from program_processor
     "gtfn_cpu",
     "gtfn_gpu",
+    "dace_cpu",
+    "dace_gpu",
     "itir_python",
     # from fbuiltins
     "IndexType",

@@ -76,6 +76,9 @@ class FieldConstructor:
                 device = DEFAULT_DEVICE
             # Currently we use optimized CPU layout, but possibly we could also use standard numpy allocation
             allocator = next_allocators.device_allocators[device.device_type]
+        requested = allocator
+        if next_allocators.is_field_allocator_factory(allocator):
+            allocator = allocator.__gt_allocator__
 
         if core_ndarray_utils.is_array_namespace(allocator):
             if aligned_index is not None:
@@ -93,9 +96,7 @@ class FieldConstructor:
             self._array_constructor = _ArrayAPIArrayConstructor(
                 array_ns=allocator, device=translated_device
             )
-        elif next_allocators.is_field_allocation_tool(allocator):
-            if next_allocators.is_field_allocator_factory(allocator):
-                allocator = allocator.__gt_allocator__
+        elif next_allocators.is_field_allocator(allocator):
             if device is not None and allocator.__gt_device_type__ != device.device_type:
                 raise ValueError(
                     f"Allocator {allocator} is for device type {allocator.__gt_device_type__}, but device type {device.device_type} was specified."
@@ -106,7 +107,7 @@ class FieldConstructor:
                 aligned_index=aligned_index,
             )
         else:
-            raise ValueError(f"Invalid field allocator: {allocator}.")
+            raise ValueError(f"Invalid field allocator: {requested}.")
 
     def _construct_from_array(
         self,

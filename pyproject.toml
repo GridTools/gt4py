@@ -19,12 +19,15 @@ dev = [
 ]
 docs = [
   'esbonio>=0.16.0',
+  'furo>=2025.12.19',
   'jupytext>=1.14',
   'matplotlib>=3.9.0',
-  'myst-parser>=4.0.0',
+  'myst-nb>=1.4.0',
+  'myst-parser>=5.2.0',
   'pygments>=2.7.3',
-  'sphinx>=7.3.7',
-  'sphinx-rtd-theme>=3.0.1',
+  'sphinx>=9.1.0 ; python_version < "3.13"',  # last version supporting Python 3.12
+  'sphinx>=9.2.0 ; python_version >= "3.13"',
+  'sphinx-design>=0.8.0',
   'sphinx-toolbox>=3.8.1'
 ]
 frameworks = [
@@ -93,7 +96,7 @@ classifiers = [
 ]
 dependencies = [
   'attrs>=21.3',
-  'array-api-compat>=1.13',
+  'array-api-compat>=1.14',  # first version whose `clip` is traceable by `torch.compile`
   'boltons>=20.1',
   'cached-property>=1.5.1',
   'click>=8.0.0',
@@ -148,10 +151,10 @@ cartesian = ['black>=25.11', 'clang-format>=18.1', 'gt4py[jax,standard,testing]'
 cuda12 = ['cupy-cuda12x>=12.0']
 cuda13 = ['cupy-cuda13x>=14.0']
 jax = [
-  'jax>=0.4.32 ; python_version < "3.14"',  # first version whose array API namespace is jax.numpy
+  'jax>=0.7.0 ; python_version < "3.14"',  # first version with jax.experimental.layout.{Format,Layout} API
   'jax>=0.9.1 ; python_version >= "3.14"'  # first version with pre-built wheel for Python 3.14
 ]
-jax-cuda12 = ['jax[cuda12-local]>=0.6.0', 'gt4py[cuda12]']
+jax-cuda12 = ['jax[cuda12-local]>=0.7.0', 'gt4py[cuda12]']
 jax-cuda13 = ['jax[cuda13-local]>=0.7.0', 'gt4py[cuda13]']
 next = ['gt4py[jax,standard,testing]']
 rocm6 = ['cupy>=13.4.1,<14.0']
@@ -286,6 +289,9 @@ markers = [
   'embedded_concat_where_non_contiguous_domain: tests with concat_where on non-contiguous domains',
   'uses_program_metrics: tests that require backend support for program metrics',
   'uses_program_with_sliced_out_arguments: tests that use a sliced argument which is not supported for non-mutable arrays, e.g. JAX',
+  'uses_scalar_in_control_flow: tests that branch in Python on a scalar argument',
+  'uses_scalar_in_domain: tests that use a scalar argument as a domain bound',
+  'uses_scan_carry_in_control_flow: tests that branch in Python on the carry of a scan',
   'checks_specific_error: tests that rely on the backend to produce a specific error message'
 ]
 norecursedirs = ['dist', 'build', '_local/*', '.*']

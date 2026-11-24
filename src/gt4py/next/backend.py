@@ -9,9 +9,11 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Generic
+import inspect
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any, Generic
 
-from gt4py._core import definitions as core_defs
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.next import config, custom_layout_allocators as next_allocators
 from gt4py.next.ffront import (
     foast_to_gtir,
@@ -25,6 +27,10 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.past_passes import linters as past_linters
 from gt4py.next.iterator import ir as itir
 from gt4py.next.otf import arguments, artifacts, stages, toolchain, workflow
+
+
+if TYPE_CHECKING:
+    from gt4py.next.ffront import decorator as ffront_decorator
 
 
 def jit_to_aot_args(
@@ -148,7 +154,10 @@ DEFAULT_TRANSFORMS: Transforms = Transforms()
 class Backend(Generic[core_defs.DeviceTypeT]):
     name: str
     executor: workflow.Workflow[stages.CompilableProgramDef, artifacts.CompilationArtifact]
-    allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
+    allocator: (
+        next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
+        | core_ndarray_utils.ArrayNamespace
+    )
     transforms: workflow.Workflow[stages.ConcreteProgramDef, stages.CompilableProgramDef]
 
     def compile(
@@ -170,8 +179,54 @@ class Backend(Generic[core_defs.DeviceTypeT]):
     @property
     def __gt_allocator__(
         self,
-    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+    ) -> (
+        next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
+        | core_ndarray_utils.ArrayNamespace
+    ):
         return self.allocator
+
+
+def _not_compiled(*args: Any, **kwargs: Any) -> Any:
+    raise RuntimeError("An embedded backend runs programs embedded; it does not compile them.")
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class EmbeddedBackend(Backend):
+    """
+    Runs programs and field operators embedded, on arrays of its allocator's array namespace.
+
+    It does not compile, and it raises for fields of another array library. Subclasses run the
+    embedded execution inside the tracing compiler of the library, e.g. `jax.jit`, by
+    overriding `wrap`.
+    """
+
+    executor: workflow.Workflow[stages.CompilableProgramDef, artifacts.CompilationArtifact] = (
+        _not_compiled
+    )
+    transforms: workflow.Workflow[stages.ConcreteProgramDef, stages.CompilableProgramDef] = (
+        DEFAULT_TRANSFORMS
+    )
+
+    def runner(self, entry_point: ffront_decorator.GTEntryPoint) -> Callable[..., None]:
+        """
+        `entry_point` run embedded, wrapped by `wrap`, called as the entry point is.
+
+        Called once per entry point: the result is cached by it.
+        """
+        from gt4py.next.program_processors.runners.experimental import embedded
+
+        return embedded.runner(entry_point, self.wrap, self.allocator)
+
+    def wrap(
+        self, entry: Callable[..., None], signature: inspect.Signature, static_params: Sequence[str]
+    ) -> Callable[..., None]:
+        """
+        `entry`, the embedded execution called as `signature` describes, as the backend runs it.
+
+        Subclasses wrap it in a tracing compiler, with the parameters `static_params` static. The
+        arguments are fields, connectivities, scalars and (nested) tuples of them.
+        """
+        return entry
 
 
 @dataclasses.dataclass(frozen=True)

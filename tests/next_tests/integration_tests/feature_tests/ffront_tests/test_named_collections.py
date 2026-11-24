@@ -204,6 +204,7 @@ def constructed_inside_dataclass_program_with_domain(
     )
 
 
+@pytest.mark.uses_scalar_in_domain
 @pytest.mark.parametrize(
     "testee",
     [

@@ -28,7 +28,8 @@ try:
 except ImportError:
 
     def _np_gamma(a: core_defs.NDArrayObject) -> core_defs.NDArrayObject:
-        return np.vectorize(math.gamma, otypes=[a.dtype])(a)
+        # `[()]`: a scalar for a scalar argument, as from a ufunc
+        return np.vectorize(math.gamma, otypes=[np.result_type(a)])(a)[()]
 
 
 class NumPyOps(array_ops.ArrayOps):

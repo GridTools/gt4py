@@ -25,11 +25,12 @@ from __future__ import annotations
 import dataclasses
 from collections.abc import Callable, Mapping
 from types import ModuleType
-from typing import Any, ClassVar, Final
+from typing import Any, ClassVar, Final, TypeAlias
 
 import array_api_compat
 import array_api_compat.numpy as compat_numpy
 import numpy as np
+from typing_extensions import TypeIs
 
 from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.next import common
@@ -229,6 +230,15 @@ class ArrayOps:
                 f" to an array of '{self.xp.__name__}'."
             )
 
+    def scalar(self, array: core_defs.NDArrayObject) -> Any:
+        """
+        The element of the 0-d `array`, as a NumPy scalar.
+
+        Libraries with tracing override it to return a traced `array` itself: its value is
+        only known at run time.
+        """
+        return self.to_numpy(array)[()]
+
     def to_numpy(self, array: core_defs.NDArrayObject) -> np.ndarray:
         return np.from_dlpack(array, device="cpu", copy=None)  # type: ignore[arg-type] # `NDArrayObject` typing is not complete
 
@@ -264,6 +274,24 @@ def of(array: Any) -> ArrayOps:
             array_api_compat.array_namespace(array)
         )
         return ops
+
+
+def is_0d_array(value: Any) -> bool:
+    """A 0-d array that is not a scalar, e.g. a traced scalar argument under `jax.jit`."""
+    return (
+        not core_defs.is_scalar_type(value)
+        and getattr(value, "ndim", None) == 0
+        and array_api_compat.is_array_api_obj(value)
+    )
+
+
+#: A scalar or an array; `is_scalar_like` narrows to it, since typing has no 0-d arrays
+NDValue: TypeAlias = core_defs.Scalar | core_defs.NDArrayObject
+
+
+def is_scalar_like(value: Any) -> TypeIs[NDValue]:
+    """A scalar, or a 0-d array."""
+    return core_defs.is_scalar_type(value) or is_0d_array(value)
 
 
 def default() -> ArrayOps:

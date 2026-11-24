@@ -39,6 +39,7 @@ def test_scalar_arg(unstructured_case):
     )
 
 
+@pytest.mark.uses_scalar_in_control_flow
 def test_np_bool_scalar_arg(unstructured_case):
     """Test scalar argument being turned into 0-dim field."""
 

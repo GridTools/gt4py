@@ -56,6 +56,7 @@ def prog_no_tuple(
     testee_no_tuple(a, b, out=out_a, domain={IDim: (0, i_size)})
 
 
+@pytest.mark.uses_scalar_in_domain
 def test_program_no_tuple(cartesian_case):
     a = cases.allocate(cartesian_case, prog_no_tuple, "a")()
     b = cases.allocate(cartesian_case, prog_no_tuple, "b")()
@@ -89,6 +90,7 @@ def prog_orig(
     fop_original(a, b, out=(out_b, out_a), domain={IDim: (0, i_size)})
 
 
+@pytest.mark.uses_scalar_in_domain
 @pytest.mark.uses_tuple_returns
 def test_program_orig(cartesian_case):
     a = cases.allocate(cartesian_case, prog_orig, "a")()
@@ -188,6 +190,7 @@ def prog(
     )
 
 
+@pytest.mark.uses_scalar_in_domain
 @pytest.mark.uses_tuple_returns
 def test_program(cartesian_case):
     a = cases.allocate(cartesian_case, prog, "a")()
@@ -258,6 +261,7 @@ def prog_out_as_tuple(
     fop_different_fields(a, b, out=out, domain=({JDim: (0, j_size)}, {IDim: (0, i_size)}))
 
 
+@pytest.mark.uses_scalar_in_domain
 @pytest.mark.uses_tuple_returns
 def test_program_out_as_tuple(
     cartesian_case,
@@ -302,6 +306,7 @@ def prog_out_as_tuple_different_sizes(
     )
 
 
+@pytest.mark.uses_scalar_in_domain
 @pytest.mark.uses_tuple_returns
 def test_program_out_as_tuple_different_sizes(
     cartesian_case,
@@ -372,6 +377,7 @@ def prog_nested_tuples(
     )
 
 
+@pytest.mark.uses_scalar_in_domain
 @pytest.mark.uses_tuple_returns
 def test_program_nested_tuples(
     cartesian_case,
@@ -440,6 +446,7 @@ def prog_double_nested_tuples(
     )
 
 
+@pytest.mark.uses_scalar_in_domain
 @pytest.mark.uses_tuple_returns
 def test_program_double_nested_tuples(
     cartesian_case,
@@ -491,6 +498,7 @@ def prog_two_vertical_dims(
     )
 
 
+@pytest.mark.uses_scalar_in_domain
 @pytest.mark.uses_tuple_returns
 def test_program_two_vertical_dims(cartesian_case):
     a = cases.allocate(cartesian_case, prog_two_vertical_dims, "a")()
@@ -528,6 +536,7 @@ def prog_unstructured(
     fop_shift_e2c(a, out=(out_a_shifted, out_a), domain=({Cell: (0, c_size)}, {Edge: (0, e_size)}))
 
 
+@pytest.mark.uses_scalar_in_domain
 @pytest.mark.uses_tuple_returns
 @pytest.mark.uses_unstructured_shift
 def test_program_unstructured(unstructured_case):
@@ -577,6 +586,7 @@ def prog_temporary(
     )
 
 
+@pytest.mark.uses_scalar_in_domain
 @pytest.mark.uses_tuple_returns
 @pytest.mark.uses_unstructured_shift
 def test_program_temporary(unstructured_case):

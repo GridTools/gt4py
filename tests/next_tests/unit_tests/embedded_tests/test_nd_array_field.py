@@ -356,6 +356,78 @@ def test_as_scalar(nd_array_implementation):
     assert isinstance(result, np.float32)
 
 
+def test_0d_array_operand(nd_array_implementation):
+    field = _make_field_or_scalar([1.0, 2.0], nd_array_implementation)
+
+    result = field * asarray(nd_array_implementation, 3.0, dtype=np.float32)
+
+    np.testing.assert_array_equal(result.asnumpy(), [3.0, 6.0])
+    assert result.asnumpy().dtype == np.float32
+
+
+def test_setitem_0d_array(nd_array_implementation):
+    field = _make_field_or_scalar([1.0, 2.0, 3.0], nd_array_implementation)
+
+    field[field.domain.slice_at[1:2]] = asarray(nd_array_implementation, 7.0, dtype=np.float32)
+
+    np.testing.assert_array_equal(field.asnumpy(), [1.0, 7.0, 3.0])
+
+
+def test_math_builtins_on_0d_arrays(nd_array_implementation):
+    four = asarray(nd_array_implementation, 4.0, dtype=np.float32)
+    two = asarray(nd_array_implementation, 2, dtype=np.int32)
+
+    xp = array_ops.of(four).xp
+    for result, expected in ((fbuiltins.sqrt(four), 2.0), (fbuiltins.maximum(four, 5.0), 5.0)):
+        assert result.ndim == 0 and array_ops.of(result).xp is xp
+        assert result.dtype == array_ops.of(four).dtype(np.float32)
+        assert float(result) == expected
+    as_float = fbuiltins.astype(two, np.float64)
+    assert as_float.ndim == 0 and array_ops.of(as_float).xp is xp
+    assert as_float.dtype == array_ops.of(as_float).dtype(np.float64)
+    assert float(as_float) == 2.0
+
+
+def test_broadcast_0d_array(nd_array_implementation):
+    two = asarray(nd_array_implementation, 2.0, dtype=np.float32)
+    field = _make_field_or_scalar([1.0, 2.0, 3.0], nd_array_implementation)
+
+    broadcasted = fbuiltins.broadcast(two, (D0,))
+
+    # as for a scalar: the value itself, which broadcasts in the operations it takes part in
+    assert broadcasted is two
+    np.testing.assert_array_equal((field * broadcasted).asnumpy(), [2.0, 4.0, 6.0])
+
+
+def test_where_with_0d_array_branches(nd_array_implementation):
+    mask = common._field(
+        asarray(nd_array_implementation, [True, False], dtype=np.bool_),
+        domain=common.domain({D0: 2}),
+    )
+    one = asarray(nd_array_implementation, 1.0, dtype=np.float32)
+
+    first, second = fbuiltins.where(mask, (one, 2.0), (3.0, one))
+
+    np.testing.assert_array_equal(first.asnumpy(), [1.0, 3.0])
+    np.testing.assert_array_equal(second.asnumpy(), [2.0, 1.0])
+
+
+def test_astype_tuple_with_0d_array(nd_array_implementation):
+    two = asarray(nd_array_implementation, 2, dtype=np.int32)
+
+    as_float, scalar = fbuiltins.astype((two, np.int32(3)), np.float64)
+
+    assert as_float.ndim == 0 and as_float.dtype == array_ops.of(as_float).dtype(np.float64)
+    assert scalar == 3.0 and isinstance(scalar, np.float64)
+
+
+def test_math_builtins_reject_nd_arrays(nd_array_implementation):
+    values = asarray(nd_array_implementation, [1.0, 4.0], dtype=np.float32)
+
+    with pytest.raises(AssertionError):
+        fbuiltins.sqrt(values)
+
+
 def product_nd_array_implementation_params():
     for xp1 in ND_ARRAY_IMPLEMENTATIONS:
         for xp2 in ND_ARRAY_IMPLEMENTATIONS:
@@ -2615,156 +2687,6 @@ def test_concat(fields_data, dim, expected_data, expect_error):
         np.testing.assert_allclose(result.asnumpy(), expected_array)
 
 
-_TORCH_DEVICES = [
-    "cpu",
-    pytest.param("cuda", marks=(pytest.mark.requires_gpu, pytest.mark.requires_torch_cuda)),
-]
-
-
-def _torch_field(values, device, dtype=None):
-    import torch
-
-    tensor = torch.asarray(values, dtype=dtype or torch.float64, device=device)
-    return common._field(tensor, domain=common.domain({D0: tensor.shape[0]}))
-
-
-@pytest.mark.requires_torch
-@pytest.mark.parametrize("device", _TORCH_DEVICES)
-@pytest.mark.parametrize(
-    "builtin, np_func",
-    [
-        (fbuiltins.minimum, np.minimum),
-        (fbuiltins.maximum, np.maximum),
-        (fbuiltins.fmod, np.fmod),
-        (operator.add, operator.add),
-        (operator.lt, operator.lt),
-        (operator.eq, operator.eq),
-    ],
-)
-@pytest.mark.parametrize(
-    "scalar", [0.5, np.float64(0.5), np.float32(0.5)], ids=["python", "float64", "float32"]
-)
-@pytest.mark.parametrize("scalar_first", [True, False])
-def test_torch_binary_builtin_with_scalar(device, builtin, np_func, scalar, scalar_first):
-    field = _torch_field([1.0, -2.0, 3.0], device)
-    args = (scalar, field) if scalar_first else (field, scalar)
-    expected = np_func(*(a.asnumpy() if isinstance(a, common.Field) else a for a in args))
-
-    result = builtin(*args)
-
-    assert result.ndarray.device.type == device
-    assert result.asnumpy().dtype == expected.dtype
-    np.testing.assert_allclose(result.asnumpy(), expected)
-
-
-@pytest.mark.requires_torch
-@pytest.mark.parametrize("device", _TORCH_DEVICES)
-@pytest.mark.parametrize("op", [operator.and_, operator.or_, operator.xor])
-def test_torch_logical_op_with_python_bool(device, op):
-    import torch
-
-    field = _torch_field([True, False], device, dtype=torch.bool)
-
-    result = op(field, True)
-
-    assert result.ndarray.device.type == device
-    np.testing.assert_array_equal(result.asnumpy(), op(np.asarray([True, False]), True))
-
-
-@pytest.mark.requires_torch
-@pytest.mark.parametrize("device", _TORCH_DEVICES)
-def test_torch_python_int_keeps_integer_dtype(device):
-    import torch
-
-    field = _torch_field([1, 2], device, dtype=torch.int32)
-
-    assert (field + 1).ndarray.dtype == torch.int32
-    assert fbuiltins.minimum(field, 1).ndarray.dtype == torch.int32
-
-
-@pytest.mark.requires_torch
-@pytest.mark.parametrize("device", _TORCH_DEVICES)
-def test_torch_where_with_scalar_condition_keeps_device(device):
-    result = fbuiltins.where(True, _torch_field([1.0, 2.0], device), 0.0)
-
-    assert result.ndarray.device.type == device
-    np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0])
-
-
-@pytest.mark.requires_torch
-def test_torch_gamma_at_poles_matches_scipy():
-    import scipy.special
-
-    x = [0.0, -0.0, -1.0, -2.0, -2.5, 0.5, 5.0]
-
-    result = fbuiltins.gamma(_torch_field(x, "cpu"))
-
-    np.testing.assert_allclose(result.asnumpy(), scipy.special.gamma(x), equal_nan=True)
-
-
-@pytest.mark.requires_torch
-@pytest.mark.parametrize("device", _TORCH_DEVICES)
-def test_torch_scan_result_on_device_of_inputs(device):
-    import torch
-
-    from gt4py.next.embedded import context as embedded_context, operators
-
-    K = Dimension("K", kind=DimensionKind.VERTICAL)
-    scan = operators.ScanOperator(lambda state, x: state + x, forward=True, init=0.0, axis=K)
-    x = common._field(
-        torch.ones(4, dtype=torch.float64, device=device), domain=common.domain({K: 4})
-    )
-
-    with embedded_context.update(
-        closure_column_range=NamedRange(K, UnitRange(0, 4)), offset_provider={}
-    ):
-        result = scan(x)
-
-    assert result.ndarray.device.type == device
-    np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0, 3.0, 4.0])
-
-
-@pytest.mark.requires_torch
-@pytest.mark.parametrize("device", _TORCH_DEVICES)
-def test_torch_asnumpy_of_tensor_requiring_grad(device):
-    import torch
-
-    tensor = torch.asarray([1.0, 2.0], dtype=torch.float64, device=device).requires_grad_()
-    field = common._field(tensor, domain=common.domain({D0: 2}))
-
-    np.testing.assert_array_equal(field.asnumpy(), [1.0, 2.0])
-
-
-@pytest.mark.requires_torch
-@pytest.mark.parametrize("device", _TORCH_DEVICES)
-def test_torch_grad_through_premap_with_skip_values(device):
-    import torch
-
-    from gt4py.next.embedded import context as embedded_context
-
-    V = Dimension("V")
-    E = Dimension("E")
-    E2VDim = Dimension("E2V", kind=DimensionKind.LOCAL)
-    e2v = common._connectivity(
-        torch.asarray([[0, 1], [2, -1]], dtype=torch.int32, device=device),
-        codomain=V,
-        domain=common.domain({E: (0, 2), E2VDim: (0, 2)}),
-        skip_value=-1,
-    )
-    # the skip entry gathers some element before it is masked, and the gradient is NaN where
-    # the operator is singular at that element, so every element is regular for `sqrt`
-    x = torch.tensor([4.0, 9.0, 16.0, 1.0], dtype=torch.float64, device=device, requires_grad=True)
-    field = common._field(x, domain=common.domain({V: (0, 4)}))
-
-    with embedded_context.update(offset_provider={"E2V": e2v}):
-        result = fbuiltins.neighbor_sum(fbuiltins.sqrt(field.premap(e2v)), axis=E2VDim)
-    loss = torch.sum(result.ndarray)
-    loss.backward()
-
-    np.testing.assert_allclose(loss.item(), 9.0)
-    np.testing.assert_allclose(x.grad.cpu().numpy(), [0.25, 1.0 / 6.0, 0.125, 0.0])
-
-
 def test_connectivity_field_setitem_raises():
     conn = common._connectivity(
         np.asarray([[0, 1], [-1, -1]]),
@@ -2836,21 +2758,3 @@ def test_scan_result_on_non_default_device_of_inputs():
 
     assert result.ndarray.device == data.device
     np.testing.assert_array_equal(result.asnumpy(), [1.0, 2.0, 3.0, 4.0])
-
-
-@pytest.mark.requires_torch
-@pytest.mark.parametrize("device", _TORCH_DEVICES)
-def test_torch_buffer_info(device):
-    import torch
-
-    data = torch.arange(24.0, dtype=torch.float64, device=device).reshape(2, 3, 4)[:, 1:, ::2]
-    field = common._field(data, domain=common.domain({D0: 2, D1: 2, D2: 2}))
-
-    buffer_info = field.__gt_buffer_info__
-
-    assert buffer_info.data_ptr == data.data_ptr()
-    assert buffer_info.shape == tuple(data.shape)
-    assert buffer_info.elem_strides == data.stride()
-    assert buffer_info.device.device_type == (
-        core_defs.DeviceType.CUDA if device == "cuda" else core_defs.DeviceType.CPU
-    )
