@@ -103,6 +103,11 @@ test_cscs_gh200:
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'dace' && $DETAIL == 'nomesh'
       variables:
         SLURM_TIMELIMIT: "00:15:00"
+    - if: $SUBPACKAGE == 'next' && $VARIANT == 'internal' && $SUBVARIANT == 'cuda13'
+      variables:
+        # 32 workers run the node out of host memory
+        PYTEST_XDIST_AUTO_NUM_WORKERS: 16
+        SLURM_TIMELIMIT: "00:15:00"
     - if: $SUBPACKAGE == 'next' && $VARIANT == 'internal' && $DETAIL == 'nomesh'
       variables:
         SLURM_TIMELIMIT: "00:10:00"

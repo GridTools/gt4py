@@ -115,6 +115,22 @@ no_backend = NoBackend(
             ),
         ),
         pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.JAX_JIT,
+            marks=pytest.mark.requires_jax,
+        ),
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.TORCH_COMPILE,
+            marks=pytest.mark.requires_torch,
+        ),
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.TORCH_COMPILE_CUDA,
+            marks=(
+                pytest.mark.requires_torch,
+                pytest.mark.requires_torch_cuda,
+                pytest.mark.requires_gpu,
+            ),
+        ),
+        pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU,
             marks=pytest.mark.uses_dace,
         ),

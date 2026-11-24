@@ -9,11 +9,12 @@
 """
 `ArrayOps` for torch tensors, and the embedded fields as torch pytrees.
 
-Everything gt4py knows about `torch.compile` is in this module (ADR 0029).
-Dynamo does not trace embedded code: a region calls it through a
-`torch.compiler.nonstrict_trace` function, which gets the fields and connectivities
-as pytree nodes and runs the embedded code on the fake tensors of the trace. A
-connectivity table inside the trace is one of two cases:
+How embedded fields and connectivities behave under `torch.compile` is in this
+module (ADR 0029); `runners.experimental.torch_compile` runs programs in a region. Dynamo does not
+trace embedded code: a region calls it through a `torch.compiler.nonstrict_trace`
+function, which gets the fields and connectivities as pytree nodes and runs the
+embedded code on the fake tensors of the trace. A connectivity table inside the trace
+is one of two cases:
 
 - it stands for a concrete table, which it got through the pytree context: its
   static values are a NumPy array with the values of the concrete table;

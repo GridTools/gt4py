@@ -181,7 +181,7 @@ def _intersect_scan_args(
 
 def _is_maybe_nested_in_tuple_of_scalars(
     value: object,
-) -> TypeIs[xtyping.MaybeNestedInTuple[array_ops.ScalarLike]]:
+) -> TypeIs[xtyping.MaybeNestedInTuple[array_ops.NDValue]]:
     """Scalars or 0-d arrays, or (nested) tuples of them."""
     return all(array_ops.is_scalar_like(v) for v in utils.flatten_nested_tuple((value,)))
 
@@ -189,10 +189,10 @@ def _is_maybe_nested_in_tuple_of_scalars(
 def _tuple_assign_value(
     pos: Sequence[common.NamedIndex],
     target: xtyping.MaybeNestedInTuple[common.MutableField],
-    source: xtyping.MaybeNestedInTuple[array_ops.ScalarLike],
+    source: xtyping.MaybeNestedInTuple[array_ops.NDValue],
 ) -> None:
     @utils.tree_map
-    def impl(target: common.MutableField, source: array_ops.ScalarLike) -> None:
+    def impl(target: common.MutableField, source: array_ops.NDValue) -> None:
         target[pos] = source
 
     impl(target, source)
@@ -200,10 +200,10 @@ def _tuple_assign_value(
 
 def _tuple_at(
     pos: Sequence[common.NamedIndex],
-    field: xtyping.MaybeNestedInTuple[common.Field | array_ops.ScalarLike],
-) -> array_ops.ScalarLike | tuple[array_ops.ScalarLike | tuple, ...]:
+    field: xtyping.MaybeNestedInTuple[common.Field | array_ops.NDValue],
+) -> array_ops.NDValue | tuple[array_ops.NDValue | tuple, ...]:
     @named_collections.tree_map_named_collection
-    def impl(field: common.Field | array_ops.ScalarLike) -> array_ops.ScalarLike:
+    def impl(field: common.Field | array_ops.NDValue) -> array_ops.NDValue:
         res = field[pos].as_scalar() if isinstance(field, common.Field) else field
         assert array_ops.is_scalar_like(res)
         return res

@@ -15,7 +15,6 @@ from typing import Any, TypeVar, overload
 
 import gt4py.eve as eve
 import gt4py.next.common as common
-import gt4py.next.embedded as gtx_embedded
 import gt4py.next.errors.exceptions as exceptions
 
 
@@ -80,20 +79,20 @@ def update(
     closure_token, offset_provider_token = None, None
     if closure_column_range is not eve.NOTHING:
         assert not isinstance(closure_column_range, eve.NothingType)
-        closure_token = gtx_embedded.context._closure_column_range.set(closure_column_range)
+        closure_token = _closure_column_range.set(closure_column_range)
     if offset_provider is not eve.NOTHING:
         assert not isinstance(offset_provider, eve.NothingType)
-        offset_provider_token = gtx_embedded.context._offset_provider.set(offset_provider)
+        offset_provider_token = _offset_provider.set(offset_provider)
 
     try:
         yield None
     finally:
         if closure_column_range is not eve.NOTHING:
             assert closure_token is not None
-            gtx_embedded.context._closure_column_range.reset(closure_token)
+            _closure_column_range.reset(closure_token)
         if offset_provider is not eve.NOTHING:
             assert offset_provider_token is not None
-            gtx_embedded.context._offset_provider.reset(offset_provider_token)
+            _offset_provider.reset(offset_provider_token)
 
 
 def within_valid_context() -> bool:
