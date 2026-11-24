@@ -47,6 +47,9 @@ nox.options.sessions = [
     "test_cartesian-3.13(dace, cpu)",
     "test_cartesian-3.14(internal, cpu)",
     "test_cartesian-3.14(dace, cpu)",
+    "test_core-3.12(cpu)",
+    "test_core-3.13(cpu)",
+    "test_core-3.14(cpu)",
     "test_eve-3.12",
     "test_eve-3.13",
     "test_eve-3.14",
@@ -248,6 +251,41 @@ def test_cartesian(
     session.run(
         *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
         str(pathlib.Path("src") / "gt4py" / "cartesian"),
+    )
+
+
+@nox.session(python=PYTHON_VERSIONS, tags=["cartesian", "next"])
+@nox.parametrize("device", [*DeviceNoxParam.values()])
+def test_core(
+    session: nox.Session,
+    device: DeviceOption,
+) -> None:
+    """Run selected 'gt4py._core' tests."""
+
+    device_settings = DeviceTestSettings[device]
+    extras = ["standard", "testing", "jax", *device_settings["extras"]]
+    markers = [*device_settings["markers"]]
+    if _session_runs_torch(session, device):
+        extras.append("torch")
+    else:
+        markers.append("not requires_torch")
+
+    install_session_venv(session, extras=extras, groups=["test"])
+
+    session.run(
+        *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        # An unmet `requires_*` marker means a broken environment. Fail loudly
+        # instead of skipping all tests due to the auto-skip in 'tests/conftest.py'.
+        # Applies to every `requires_*`: install the extra, or exclude the marker.
+        "--require-optional-deps",
+        *("-m", " and ".join(markers)),
+        str(pathlib.Path("tests") / "core_tests"),
+        *session.posargs,
+    )
+    session.run(
+        *"pytest --doctest-modules -sv".split(),
+        str(pathlib.Path("src") / "gt4py" / "_core"),
+        success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
     )
 
 
