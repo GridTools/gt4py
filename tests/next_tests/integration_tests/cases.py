@@ -398,7 +398,7 @@ def allocate(
 
 def runs_embedded(case: Case) -> bool:
     """Whether the case's programs run embedded, i.e. are not compiled."""
-    return case.backend is None or isinstance(case.backend, next_backend.EmbeddedJitBackend)
+    return case.backend is None or isinstance(case.backend, next_backend.EmbeddedBackend)
 
 
 def run(
