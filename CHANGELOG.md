@@ -2,6 +2,16 @@
 
 Notable changes to this project will be documented in this file. The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [1.2.6] - 2026-11-24
+
+### General
+
+- Publish a unified user documentation site covering both `gt4py.cartesian` and `gt4py.next`.
+
+### Next
+
+- Add experimental Jax and PyTorch backends to embedded execution.
+
 ## [1.2.5] - 2026-11-17
 
 ### General
