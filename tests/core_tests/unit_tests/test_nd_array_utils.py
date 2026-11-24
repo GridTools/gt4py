@@ -29,8 +29,8 @@ def cuda_device(id_: int) -> Any:
         pytest.param(ndarray_utils.cupy, None, None, marks=pytest.mark.requires_gpu),
         pytest.param(
             ndarray_utils.cupy,
-            definitions.Device(definitions.CUPY_DEVICE_TYPE, 42),
-            cuda_device(42),
+            definitions.Device(definitions.CUPY_DEVICE_TYPE, 0),
+            cuda_device(0),
             marks=pytest.mark.requires_gpu,
         ),
     ],
@@ -57,16 +57,51 @@ def test_is_array_namespace(array_ns):
     [
         (None, None),
         (definitions.Device(definitions.DeviceType.CPU, 0), "cpu"),
-        (definitions.Device(definitions.DeviceType.CUDA, 1), "cuda:1"),
-        (definitions.Device(definitions.DeviceType.ROCM, 0), "cuda:0"),
+        pytest.param(
+            definitions.Device(definitions.DeviceType.CUDA, 0),
+            "cuda:0",
+            marks=pytest.mark.requires_gpu,
+        ),
+        pytest.param(
+            definitions.Device(definitions.DeviceType.ROCM, 0),
+            "cuda:0",
+            marks=pytest.mark.requires_gpu,
+        ),
     ],
 )
 def test_get_device_translator_torch(gt4py_device, expected_device):
     import torch
 
+    if expected_device == "cuda:0" and not torch.cuda.is_available():
+        pytest.skip("no torch GPU device")
     translator = ndarray_utils.get_device_translator(torch)
     expected = None if expected_device is None else torch.device(expected_device)
     assert translator(gt4py_device) == expected
+
+
+@pytest.mark.requires_torch
+@pytest.mark.parametrize("device_type", [definitions.DeviceType.CUDA, definitions.DeviceType.ROCM])
+def test_get_device_translator_torch_missing_gpu(device_type):
+    import torch
+
+    translator = ndarray_utils.get_device_translator(torch)
+    count = torch.cuda.device_count()
+    for device_id in (count, -1):
+        with pytest.raises(
+            ValueError, match=f"torch has no {device_type.name} device {device_id},"
+        ):
+            translator(definitions.Device(device_type, device_id))
+
+
+@pytest.mark.requires_gpu
+def test_get_device_translator_cupy_missing_gpu():
+    cupy = ndarray_utils.cupy
+    translator = ndarray_utils.get_device_translator(cupy)
+    count = cupy.cuda.runtime.getDeviceCount()
+    device_type = definitions.CUPY_DEVICE_TYPE
+    for device_id in (count, -1):
+        with pytest.raises(ValueError, match=f"CuPy has no {device_type.name} device {device_id},"):
+            translator(definitions.Device(device_type, device_id))
 
 
 @pytest.mark.requires_torch
@@ -113,8 +148,9 @@ def test_get_device_translator_jax_missing_gpu(device_type):
     except RuntimeError:
         num_gpus = 0
     translator = ndarray_utils.get_device_translator(jnp)
-    with pytest.raises(ValueError, match=f"jax has no {device_type.name} device {num_gpus}"):
-        translator(definitions.Device(device_type, num_gpus))
+    for device_id in (num_gpus, -1):
+        with pytest.raises(ValueError, match=f"jax has no {device_type.name} device {device_id}"):
+            translator(definitions.Device(device_type, device_id))
 
 
 @pytest.mark.requires_jax

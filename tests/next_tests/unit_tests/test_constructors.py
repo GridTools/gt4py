@@ -350,3 +350,21 @@ def test_torch_allocator_follows_default_device():
 
     assert field.ndarray.device.type == "cuda"
     assert zeros.ndarray.device.type == "cuda"
+
+
+@pytest.mark.requires_gpu
+def test_cupy_allocator_places_fields_on_the_given_device():
+    cupy = pytest.importorskip("cupy")
+    if cupy.cuda.runtime.getDeviceCount() < 2:
+        pytest.skip("needs two GPUs")
+    device = core_defs.Device(core_defs.CUPY_DEVICE_TYPE, 1)
+
+    fields = [
+        gtx.empty({I: 3}, allocator=cupy, device=device),
+        gtx.zeros({I: 3}, allocator=cupy, device=device),
+        gtx.ones({I: 3}, allocator=cupy, device=device),
+        gtx.full({I: 3}, 2.0, allocator=cupy, device=device),
+        gtx.as_field([I], np.arange(3.0), allocator=cupy, device=device),
+    ]
+
+    assert [field.ndarray.device.id for field in fields] == [1] * len(fields)
