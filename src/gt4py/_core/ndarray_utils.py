@@ -231,7 +231,16 @@ if jax is not None:
             return jax.local_devices(backend="cpu")[0]
         # jax's 'gpu' platform is CUDA or ROCm, whichever jaxlib was built for
         if device.device_type in (core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM):
-            return jax.local_devices(backend="gpu")[device.device_id]
+            try:
+                gpus = jax.local_devices(backend="gpu")
+            except RuntimeError:  # jaxlib without a GPU plugin
+                gpus = []
+            if not 0 <= device.device_id < len(gpus):
+                raise ValueError(
+                    f"jax has no {device.device_type.name} device {device.device_id},"
+                    f" it has {len(gpus)} GPU devices."
+                )
+            return gpus[device.device_id]
         raise ValueError(f"jax does not support device type {device.device_type}.")
 
     _device_translation_registry[cast(ArrayNamespace, jnp)] = _jax_device_translator

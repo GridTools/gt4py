@@ -103,6 +103,21 @@ def test_get_device_translator_jax_gpu(device_type):
 
 
 @pytest.mark.requires_jax
+@pytest.mark.parametrize("device_type", [definitions.DeviceType.CUDA, definitions.DeviceType.ROCM])
+def test_get_device_translator_jax_missing_gpu(device_type):
+    import jax
+    import jax.numpy as jnp
+
+    try:
+        num_gpus = len(jax.local_devices(backend="gpu"))
+    except RuntimeError:
+        num_gpus = 0
+    translator = ndarray_utils.get_device_translator(jnp)
+    with pytest.raises(ValueError, match=f"jax has no {device_type.name} device {num_gpus},"):
+        translator(definitions.Device(device_type, num_gpus))
+
+
+@pytest.mark.requires_jax
 def test_is_array_namespace_jax():
     import jax.numpy as jnp
 
