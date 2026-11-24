@@ -143,10 +143,14 @@ def asarray(xp: ModuleType, data, dtype=None):
     if dtype is None:
         return xp.asarray(data)
     name = np.dtype(dtype).name
-    # MLX names the boolean dtype only `bool_`
-    return xp.asarray(
-        data, dtype=getattr(xp, name) if hasattr(xp, name) else getattr(xp, f"{name}_")
-    )
+    if is_mlx(xp):
+        # converted by NumPy and copied: with Metal, `mlx.core.asarray` shares the memory of
+        # NumPy data and reinterprets its bytes; MLX names the boolean dtype only `bool_`
+        return xp.array(
+            np.asarray(data, dtype=dtype),
+            dtype=getattr(xp, name) if hasattr(xp, name) else getattr(xp, f"{name}_"),
+        )
+    return xp.asarray(data, dtype=getattr(xp, name))
 
 
 def nd_array_implementation_params():
