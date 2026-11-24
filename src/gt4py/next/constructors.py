@@ -76,6 +76,7 @@ class FieldConstructor:
                 device = DEFAULT_DEVICE
             # Currently we use optimized CPU layout, but possibly we could also use standard numpy allocation
             allocator = next_allocators.device_allocators[device.device_type]
+        requested = allocator
         if next_allocators.is_field_allocator_factory(allocator):
             allocator = allocator.__gt_allocator__
 
@@ -106,7 +107,7 @@ class FieldConstructor:
                 aligned_index=aligned_index,
             )
         else:
-            raise ValueError(f"Invalid field allocator: {allocator}.")
+            raise ValueError(f"Invalid field allocator: {requested}.")
 
     def _construct_from_array(
         self,

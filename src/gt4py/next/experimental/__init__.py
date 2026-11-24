@@ -17,40 +17,44 @@ __all__ = [
     "concat_where",
 ]
 
-# the embedded backends, created on first access: they need an optional package
-_EMBEDDED_JIT_BACKENDS: Final = {"jax_jit": "jax", "torch_compile": "torch"}
-#: The array namespace each eager embedded backend allocates with
-_EMBEDDED_BACKENDS: Final = {
+#: The eager embedded backends, and the array namespace each allocates with
+_EAGER_BACKENDS: Final = {
     "embedded_numpy": "numpy",
     "embedded_cupy": "cupy",
     "embedded_jax": "jax.numpy",
     "embedded_torch": "torch",
 }
+#: The embedded jit backends, and the optional package each needs
+_JIT_BACKENDS: Final = {"jax_jit": "jax", "torch_compile": "torch"}
 
 
+# the backends are created on first access, since most of them need an optional package
 def __getattr__(name: str) -> Any:
-    if name in _EMBEDDED_BACKENDS:
+    if name in _EAGER_BACKENDS:
         from gt4py.next import backend as next_backend
 
-        namespace = _EMBEDDED_BACKENDS[name]
-        try:
-            allocator = importlib.import_module(namespace)
-        except ImportError as error:
-            raise AttributeError(
-                f"'{name}' requires the optional '{namespace}' package."
-            ) from error
+        namespace = _EAGER_BACKENDS[name]
+        allocator = _import(name, namespace, namespace.partition(".")[0])
         backend = next_backend.EmbeddedBackend(name=name, allocator=allocator)
-    elif name in _EMBEDDED_JIT_BACKENDS:
-        try:
-            module = importlib.import_module(
-                f"gt4py.next.program_processors.runners.experimental.{name}"
-            )
-        except ImportError as error:
-            raise AttributeError(
-                f"'{name}' requires the optional '{_EMBEDDED_JIT_BACKENDS[name]}' package."
-            ) from error
+    elif name in _JIT_BACKENDS:
+        module = _import(
+            name, f"gt4py.next.program_processors.runners.experimental.{name}", _JIT_BACKENDS[name]
+        )
         backend = getattr(module, name)
     else:
         raise AttributeError(f"Module '{__name__}' has no attribute '{name}'.")
     globals()[name] = backend
     return backend
+
+
+def __dir__() -> list[str]:
+    return [*globals(), *_EAGER_BACKENDS, *_JIT_BACKENDS]
+
+
+def _import(backend: str, module: str, package: str) -> Any:
+    try:
+        return importlib.import_module(module)
+    except ModuleNotFoundError as error:
+        if (error.name or "").partition(".")[0] != package:
+            raise
+        raise AttributeError(f"'{backend}' requires the optional '{package}' package.") from error

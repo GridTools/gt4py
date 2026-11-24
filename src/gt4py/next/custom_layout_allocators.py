@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING, Any, Final, Optional, TypeAlias, cast
 from typing_extensions import Protocol, TypeIs
 
 import gt4py._core.definitions as core_defs
+import gt4py._core.ndarray_utils as core_ndarray_utils
 import gt4py.next.common as common
 import gt4py.storage.allocators as core_allocators
 
@@ -56,7 +57,11 @@ class FieldBufferAllocatorFactoryProtocol(Protocol[core_defs.DeviceTypeT]):
 
     @property
     @abc.abstractmethod
-    def __gt_allocator__(self) -> FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]: ...
+    def __gt_allocator__(
+        self,
+    ) -> (
+        FieldBufferAllocatorProtocol[core_defs.DeviceTypeT] | core_ndarray_utils.ArrayNamespace
+    ): ...
 
 
 def is_field_allocator_factory(obj: Any) -> TypeIs[FieldBufferAllocatorFactoryProtocol]:
@@ -66,7 +71,7 @@ def is_field_allocator_factory(obj: Any) -> TypeIs[FieldBufferAllocatorFactoryPr
 def is_field_allocator_factory_for(
     obj: Any, device: core_defs.DeviceTypeT
 ) -> TypeIs[FieldBufferAllocatorFactoryProtocol[core_defs.DeviceTypeT]]:
-    return is_field_allocator_factory(obj) and obj.__gt_allocator__.__gt_device_type__ is device
+    return is_field_allocator_factory(obj) and is_field_allocator_for(obj.__gt_allocator__, device)
 
 
 FieldBufferAllocationUtil = (
