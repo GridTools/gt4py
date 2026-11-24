@@ -9,11 +9,11 @@
 # SPDX-License-Identifier: BSD-3-Clause
 #
 # Note:
-#   The explicit '--python 3.11' in the shebang is only needed due
+#   The explicit '--python 3.12' in the shebang is only needed due
 #   to the existence of the .python-versions file, which overrides
 #   the PEP 723 'requires-python' metadata.
 # /// script
-# requires-python = ">=3.11"
+# requires-python = ">=3.12"
 # dependencies = ["nox>=2025.02.09", "uv>=0.6.10"]
 # ///
 
@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import os
 import pathlib
+import shutil
+import sys
 import tomllib
 from collections.abc import Sequence
 from typing import Final, Literal, TypeAlias
@@ -91,10 +93,10 @@ CodeGenNoxParam: Final[dict[CodeGenOption, nox.param]] = {
     codegen: nox.param(codegen, id=codegen, tags=[codegen]) for codegen in CodeGenOption.__args__
 }
 CodeGenTestSettings: Final[dict[str, dict[str, list[str]]]] = {
-    "internal": {"extras": ["jax"], "markers": ["not requires_dace"]}
+    "internal": {"extras": ["jax"], "markers": ["not uses_dace"]}
 }
 CodeGenDaceTestSettings = CodeGenTestSettings | {
-    "dace": {"extras": [], "markers": ["requires_dace"]},
+    "dace": {"extras": [], "markers": ["uses_dace"]},
 }
 
 
@@ -137,7 +139,78 @@ def install_session_venv(
         )
 
 
+def _session_runs_torch(session: nox.Session, device: DeviceOption) -> bool:
+    if device in ("rocm6", "rocm7"):
+        # the torch wheels on PyPI are CUDA-only
+        return False
+    if sys.platform == "darwin":
+        # the torch wheels carry their own `libomp.dylib`, which clashes with the Homebrew
+        # one the compiled gtfn and dace extensions link: two OpenMP runtimes abort with
+        # `OMP: Error #15`
+        return False
+    return True
+
+
 # -- Sessions --
+# Latest supported Python version, since it is the one with the newest Sphinx
+@nox.session(python=PYTHON_VERSIONS[-1], tags=["docs"])
+def docs(session: nox.Session) -> None:
+    """Build the user documentation site (welcome page and `gt4py.cartesian` and `gt4py.next` subsites).
+
+    The site is made of three independent Sphinx projects which are built into
+    a single tree: the welcome page at the root, with the subsites in the
+    `cartesian/` and `next/` subfolders. Positional arguments are forwarded to
+    all `sphinx-build` invocations (e.g. `nox -s docs -- -W --keep-going`).
+    """
+
+    install_session_venv(session, extras=["standard", "testing"], groups=["docs"])
+
+    docs_dir = REPO_ROOT / "docs" / "user"
+    build_dir = docs_dir / "_build"
+    html_dir = build_dir / "html"
+    if html_dir.exists():
+        shutil.rmtree(html_dir)
+
+    # API reference of the `gt4py.cartesian` subsite: all subpackages except `next` and `eve`
+    # (the `gt4py.next` subsite has no API reference)
+    src_dir = REPO_ROOT / "src" / "gt4py"
+    apidoc_dir = docs_dir / "cartesian" / "_source"
+    for generated in apidoc_dir.glob("*.rst"):
+        generated.unlink()
+    session.run(
+        *"sphinx-apidoc --private -q -o".split(),
+        str(apidoc_dir),
+        str(src_dir),
+        str(src_dir / "next"),
+        str(src_dir / "eve"),
+    )
+
+    for source, target in [(".", "."), ("cartesian", "cartesian"), ("next", "next")]:
+        session.run(
+            *"sphinx-build -b html -E -q".split(),
+            *session.posargs,
+            "-d",
+            str(build_dir / "doctrees" / (target if target != "." else "root")),
+            str(docs_dir / source),
+            str(html_dir / target),
+        )
+
+    # Notebook execution artifacts are written by `myst-nb` next to the output folder
+    shutil.rmtree(html_dir / "jupyter_execute", ignore_errors=True)
+    (html_dir / ".nojekyll").touch()
+
+    # Keep the old `latest/` URL working by redirecting it to the current site
+    (html_dir / "latest").mkdir()
+    (html_dir / "latest" / "index.html").write_text(
+        '<!DOCTYPE html>\n<html>\n  <head>\n    <meta charset="utf-8">\n'
+        '    <meta http-equiv="refresh" content="0; url=../index.html">\n'
+        '    <link rel="canonical" href="../index.html">\n  </head>\n'
+        '  <body><a href="../index.html">GT4Py documentation</a></body>\n</html>\n'
+    )
+
+    session.log(f"Documentation site built in '{html_dir}'")
+
+
 @nox.session(python=PYTHON_VERSIONS, tags=["cartesian"])
 @nox.parametrize("device", [*DeviceNoxParam.values()])
 @nox.parametrize("codegen", [*CodeGenNoxParam.values()])
@@ -164,6 +237,10 @@ def test_cartesian(
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        # An unmet `requires_*` marker means a broken environment. Fail loudly
+        # instead of skipping all tests due to the auto-skip in 'tests/conftest.py'.
+        # Applies to every `requires_*`: install the extra, or exclude the marker.
+        "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "cartesian_tests"),
         *session.posargs,
@@ -197,14 +274,21 @@ def test_examples(session: nox.Session) -> None:
 
     install_session_venv(session, extras=["testing"], groups=["docs", "test"])
 
-    session.run(*"jupytext docs/user/next/QuickstartGuide.md --to .ipynb".split())
-    session.run(*"jupytext docs/user/next/advanced/*.md --to .ipynb".split())
+    # Pages of the `gt4py.next` documentation site which are executable notebooks
+    next_docs_dir = pathlib.Path("docs") / "user" / "next"
+    next_docs_pages = sorted(
+        str(page)
+        for page in next_docs_dir.rglob("*.md")
+        if "workshop" not in page.parts and "format_name: myst" in page.read_text()
+    )
+    session.run("jupytext", *next_docs_pages, "--to", ".ipynb")
+    session.run(*"jupytext docs/development/next/toolchain/*.md --to .ipynb".split())
 
     for notebook, extra_args in [
         ("docs/user/next/workshop/slides", None),
-        ("docs/user/next/workshop/exercises", ["-k", "solutions"]),
-        ("docs/user/next/QuickstartGuide.ipynb", None),
-        ("docs/user/next/advanced", None),
+        ("docs/user/next/workshop/exercises", ["-k", "solution"]),
+        (" ".join(page.removesuffix(".md") + ".ipynb" for page in next_docs_pages), None),
+        ("docs/development/next/toolchain", None),
         ("examples", (None)),
     ]:
         session.run(
@@ -249,16 +333,29 @@ def test_next(
             mesh_markers.append("requires_atlas")
             groups.append("frameworks")
 
+    torch_markers: list[str] = []
+    if codegen == "internal" and _session_runs_torch(session, device):
+        extras.append("torch")
+    else:
+        torch_markers.append("not requires_torch")
+
     install_session_venv(session, extras=extras, groups=groups)
 
-    markers = " and ".join(codegen_settings["markers"] + device_settings["markers"] + mesh_markers)
+    markers = " and ".join(
+        codegen_settings["markers"] + device_settings["markers"] + mesh_markers + torch_markers
+    )
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        # An unmet `requires_*` marker means a broken environment. Fail loudly
+        # instead of skipping all tests due to the auto-skip in 'tests/conftest.py'.
+        # Applies to every `requires_*`: install the extra, or exclude the marker.
+        "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "next_tests"),
         *session.posargs,
-        success_codes=[0, NO_TESTS_COLLECTED_EXIT_CODE],
+        # No `NO_TESTS_COLLECTED_EXIT_CODE` here: every combination selects tests,
+        # so collecting none means the selection broke.
     )
     session.run(
         *"pytest --doctest-modules --doctest-ignore-import-errors -sv".split(),
@@ -305,6 +402,10 @@ def test_storage(
 
     session.run(
         *"pytest --cache-clear -sv -n auto --dist loadgroup".split(),
+        # An unmet `requires_*` marker means a broken environment. Fail loudly
+        # instead of skipping all tests due to the auto-skip in 'tests/conftest.py'.
+        # Applies to every `requires_*`: install the extra, or exclude the marker.
+        "--require-optional-deps",
         *("-m", f"{markers}"),
         str(pathlib.Path("tests") / "storage_tests"),
         *session.posargs,
@@ -321,11 +422,18 @@ def test_typing_exports(session: nox.Session) -> None:
     """Test GT4Py usability in a typed client context."""
     install_session_venv(session, extras=["standard"], groups=["test", "typing_exports"])
 
+    # Pass the config explicitly: with no '--config-file', mypy discovers one by
+    # walking up from the plugin's temporary execution directory and reaches the
+    # project's own '[tool.mypy]' table, which pins 'python_version' to the supported
+    # floor and would collapse this session's 3.13/3.14 runs into the 3.12 one. See
+    # the comments in 'typing_tests/mypy.ini'.
     session.run(
         "pytest",
         "-sv",
         "--mypy-testing-base",
         "typing_tests",
+        "--mypy-ini-file",
+        "typing_tests/mypy.ini",
         "typing_tests",
         *session.posargs,
     )
@@ -400,6 +508,8 @@ def test_next_dace_determinism(
         "auto",
         "--dist",
         "loadgroup",
+        # See the note in 'test_next' above.
+        "--require-optional-deps",
         "-m",
         f"{markers}",
         str(pathlib.Path("tests") / "next_tests"),

@@ -29,6 +29,7 @@ from next_tests.fixtures.past_common import (
     float64,
     identity_def,
     invalid_call_sig_program_def,
+    make_tuple_op,
 )
 
 
@@ -173,6 +174,11 @@ def test_copy_restrict_lowering(copy_restrict_program_def, gtir_identity_fundef)
     program_pattern.match(itir_node, raise_exception=True)
 
 
+make_tuple_op_definition = itir.FunctionDefinition(
+    id="make_tuple_op", params=[itir.Sym(id="inp")], expr=im.make_tuple("inp", "inp")
+)
+
+
 def test_tuple_constructed_in_out_with_slicing(make_tuple_op):
     def tuple_program(
         inp: gtx.Field[[IDim], float64],
@@ -182,13 +188,15 @@ def test_tuple_constructed_in_out_with_slicing(make_tuple_op):
         make_tuple_op(inp, out=(out1[1:], out2[1:]))
 
     parsed = ProgramParser.apply_to_function(tuple_program)
-    ProgramLowering.apply(parsed, function_definitions=[], grid_type=gtx.GridType.CARTESIAN)
+    ProgramLowering.apply(
+        parsed, function_definitions=[make_tuple_op_definition], grid_type=gtx.GridType.CARTESIAN
+    )
 
 
 @pytest.mark.xfail(
     reason="slicing is only allowed if all fields are sliced in the same way."
 )  # see ADR 10
-def test_tuple_constructed_in_out_with_slicing(make_tuple_op):
+def test_tuple_constructed_in_out_with_one_sliced_output(make_tuple_op):
     def tuple_program(
         inp: gtx.Field[[IDim], float64],
         out1: gtx.Field[[IDim], float64],
@@ -196,8 +204,13 @@ def test_tuple_constructed_in_out_with_slicing(make_tuple_op):
     ):
         make_tuple_op(inp, out=(out1[1:], out2))
 
-    parsed = ProgramParser.apply_to_function(tuple_program)
-    ProgramLowering.apply(parsed, function_definitions=[], grid_type=gtx.GridType.CARTESIAN)
+    with pytest.raises(errors.DSLError):
+        parsed = ProgramParser.apply_to_function(tuple_program)
+        ProgramLowering.apply(
+            parsed,
+            function_definitions=[make_tuple_op_definition],
+            grid_type=gtx.GridType.CARTESIAN,
+        )
 
 
 @pytest.mark.xfail

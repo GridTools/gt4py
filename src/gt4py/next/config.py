@@ -166,6 +166,15 @@ BUILD_JOBS_MODE: BuildJobsMode = BuildJobsMode[
     os.environ.get("GT4PY_BUILD_JOBS_MODE", "process").upper()
 ]
 
+
+#: Warn (once per process) when a program is compiled while Python runs without
+#: the ``-O`` flag: the assertions and argument checks guarded by ``__debug__``
+#: add overhead to every program call. Opt-in (``GT4PY_WARN_PYTHON_DEBUG_MODE=1``),
+#: as running in debug mode is the norm in notebooks, scripts and tests, where
+#: the hint is only noise; enable it when benchmarking.
+WARN_PYTHON_DEBUG_MODE: bool = env_flag_to_bool("GT4PY_WARN_PYTHON_DEBUG_MODE", default=False)
+
+
 #: User-defined level to enable metrics at lower or equal level.
 #: Enabling metrics collection will do extra synchronization and will have
 #: impact on runtime performance.
@@ -176,6 +185,13 @@ COLLECT_METRICS_LEVEL: int = env_flag_to_int("GT4PY_COLLECT_METRICS_LEVEL", defa
 #: If set to a True value, it defaults to "gt4py_metrics_YYYYMMDD_HHMMSS.json" in
 #: the current folder.
 DUMP_METRICS_AT_EXIT: str | None = None
+
+
+#: Whether to keep all files in the DaCe build folder after compilation.
+#: This flag is mapped to the DaCe config option `compiler.build_folder_mode`.
+#: By default, if not in debug mode, the generated source code is deleted after
+#: compilation, leaving only the compiled library and SDFG JSON-file.
+KEEP_DACE_BUILD_FILES: bool = env_flag_to_bool("GT4PY_KEEP_DACE_BUILD_FILES", default=DEBUG)
 
 
 #: Filter out DaCe related warnings. If not set warnings will be suppressed if the

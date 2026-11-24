@@ -9,10 +9,12 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Generic
+import inspect
+from collections.abc import Callable, Sequence
+from typing import TYPE_CHECKING, Any, Generic
 
-from gt4py._core import definitions as core_defs
-from gt4py.next import custom_layout_allocators as next_allocators
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
+from gt4py.next import config, custom_layout_allocators as next_allocators
 from gt4py.next.ffront import (
     foast_to_gtir,
     foast_to_past,
@@ -24,7 +26,11 @@ from gt4py.next.ffront import (
 )
 from gt4py.next.ffront.past_passes import linters as past_linters
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, definitions, stages, toolchain, workflow
+from gt4py.next.otf import arguments, artifacts, stages, toolchain, workflow
+
+
+if TYPE_CHECKING:
+    from gt4py.next.ffront import decorator as ffront_decorator
 
 
 def jit_to_aot_args(
@@ -34,8 +40,8 @@ def jit_to_aot_args(
 
 
 def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
-    definitions.ConcreteProgramDef[definitions.IRDefinitionT, arguments.JITArgs],
-    definitions.ConcreteProgramDef[definitions.IRDefinitionT, arguments.CompileTimeArgs],
+    stages.ConcreteProgramDef[stages.IRDefinitionT, arguments.JITArgs],
+    stages.ConcreteProgramDef[stages.IRDefinitionT, arguments.CompileTimeArgs],
 ]:
     """Wrap `jit_to_aot` into a workflow adapter to fit into backend transform workflows."""
     return toolchain.ArgsOnlyAdapter(jit_to_aot_args)
@@ -44,8 +50,8 @@ def adapted_jit_to_aot_args_factory() -> workflow.Workflow[
 @dataclasses.dataclass(frozen=True)
 class Transforms(
     workflow.MultiWorkflow[
-        definitions.ConcreteProgramDef[definitions.IRDefinitionT, definitions.ArgsDefinitionT],
-        definitions.CompilableProgramDef,
+        stages.ConcreteProgramDef[stages.IRDefinitionT, stages.ArgsDefinitionT],
+        stages.CompilableProgramDef,
     ]
 ):
     """
@@ -63,8 +69,8 @@ class Transforms(
     """
 
     aotify_args: workflow.Workflow[
-        definitions.ConcreteProgramDef[definitions.IRDefinitionT, arguments.JITArgs],
-        definitions.ConcreteProgramDef[definitions.IRDefinitionT, arguments.CompileTimeArgs],
+        stages.ConcreteProgramDef[stages.IRDefinitionT, arguments.JITArgs],
+        stages.ConcreteProgramDef[stages.IRDefinitionT, arguments.CompileTimeArgs],
     ] = dataclasses.field(default_factory=adapted_jit_to_aot_args_factory)
 
     func_to_foast: workflow.Workflow[
@@ -92,10 +98,10 @@ class Transforms(
     ] = dataclasses.field(default_factory=past_process_args.transform_program_args_factory)
 
     past_to_itir: workflow.Workflow[
-        ffront_stages.ConcretePASTProgramDef, definitions.CompilableProgramDef
+        ffront_stages.ConcretePASTProgramDef, stages.CompilableProgramDef
     ] = dataclasses.field(default_factory=past_to_itir.past_to_gtir_factory)
 
-    def step_order(self, inp: definitions.ConcreteProgramDef) -> list[str]:
+    def step_order(self, inp: stages.ConcreteProgramDef) -> list[str]:
         steps: list[str] = []
         if isinstance(inp.args, arguments.JITArgs):
             steps.append("aotify_args")
@@ -147,20 +153,125 @@ DEFAULT_TRANSFORMS: Transforms = Transforms()
 @dataclasses.dataclass(frozen=True)
 class Backend(Generic[core_defs.DeviceTypeT]):
     name: str
-    executor: workflow.Workflow[definitions.CompilableProgramDef, stages.CompilationArtifact]
-    allocator: next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
-    transforms: workflow.Workflow[definitions.ConcreteProgramDef, definitions.CompilableProgramDef]
+    executor: workflow.Workflow[stages.CompilableProgramDef, artifacts.CompilationArtifact]
+    allocator: (
+        next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
+        | core_ndarray_utils.ArrayNamespace
+    )
+    transforms: workflow.Workflow[stages.ConcreteProgramDef, stages.CompilableProgramDef]
 
     def compile(
-        self, program: definitions.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
-    ) -> stages.ExecutableProgram:
+        self, program: stages.IRDefinitionT, compile_time_args: arguments.CompileTimeArgs
+    ) -> artifacts.ExecutableProgram:
         artifact = self.executor(
-            self.transforms(definitions.ConcreteProgramDef(data=program, args=compile_time_args))
+            self.transforms(stages.ConcreteProgramDef(data=program, args=compile_time_args))
         )
+        return self.load_artifact(artifact)
+
+    def load_artifact(self, artifact: artifacts.CompilationArtifact) -> artifacts.ExecutableProgram:
+        """Load an artifact into an executable program.
+
+        Backends may override this method to inject backend-specific runtime data
+        into the loaded program.
+        """
         return artifact.load()
 
     @property
     def __gt_allocator__(
         self,
-    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+    ) -> (
+        next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
+        | core_ndarray_utils.ArrayNamespace
+    ):
         return self.allocator
+
+
+def _not_compiled(*args: Any, **kwargs: Any) -> Any:
+    raise RuntimeError("An embedded backend runs programs embedded; it does not compile them.")
+
+
+@dataclasses.dataclass(frozen=True, kw_only=True)
+class EmbeddedBackend(Backend):
+    """
+    Runs programs and field operators embedded, on arrays of its allocator's array namespace.
+
+    It does not compile, and it raises for fields of another array library. Subclasses run the
+    embedded execution inside the tracing compiler of the library, e.g. `jax.jit`, by
+    overriding `wrap`.
+    """
+
+    executor: workflow.Workflow[stages.CompilableProgramDef, artifacts.CompilationArtifact] = (
+        _not_compiled
+    )
+    transforms: workflow.Workflow[stages.ConcreteProgramDef, stages.CompilableProgramDef] = (
+        DEFAULT_TRANSFORMS
+    )
+
+    def runner(self, entry_point: ffront_decorator.GTEntryPoint) -> Callable[..., None]:
+        """
+        `entry_point` run embedded, wrapped by `wrap`, called as the entry point is.
+
+        Called once per entry point: the result is cached by it.
+        """
+        from gt4py.next.program_processors.runners.experimental import embedded
+
+        return embedded.runner(entry_point, self.wrap, self.allocator)
+
+    def wrap(
+        self, entry: Callable[..., None], signature: inspect.Signature, static_params: Sequence[str]
+    ) -> Callable[..., None]:
+        """
+        `entry`, the embedded execution called as `signature` describes, as the backend runs it.
+
+        Subclasses wrap it in a tracing compiler, with the parameters `static_params` static. The
+        arguments are fields, connectivities, scalars and (nested) tuples of them.
+        """
+        return entry
+
+
+@dataclasses.dataclass(frozen=True)
+class ToolchainConfig:
+    """
+    Settings that describe what a compiled toolchain builds for.
+
+    A toolchain builder creates every step from one config, so steps that must
+    agree on a setting (the target device, the build type, the cache lifetime,
+    the data layout) read it from the same place and cannot drift apart.
+    Settings that only tune how a single step does its job are not part of the
+    config: they are keyword arguments of that step's builder.
+
+    Defaults are read from `gt4py.next.config` when the config is created, not
+    when this module is imported, so the toolchains built from a default config
+    follow the current user configuration.
+    """
+
+    #: Target a GPU (the one CuPy was built for) instead of the CPU.
+    gpu: bool = False
+    #: Wrap the translation step in a persistent cache.
+    cached_translation: bool = True
+    cmake_build_type: config.CMakeBuildType = dataclasses.field(
+        default_factory=lambda: config.CMAKE_BUILD_TYPE
+    )
+    cache_lifetime: config.BuildCacheLifetime = dataclasses.field(
+        default_factory=lambda: config.BUILD_CACHE_LIFETIME
+    )
+    #: Assume unit stride in the horizontal dimension of unstructured fields.
+    unstructured_horizontal_has_unit_stride: bool = dataclasses.field(
+        default_factory=lambda: config.UNSTRUCTURED_HORIZONTAL_HAS_UNIT_STRIDE
+    )
+
+    @property
+    def device_type(self) -> core_defs.DeviceType:
+        if self.gpu:
+            return core_defs.CUPY_DEVICE_TYPE or core_defs.DeviceType.CUDA
+        return core_defs.DeviceType.CPU
+
+    @property
+    def device_name(self) -> str:
+        """Device part of the toolchain name."""
+        return "gpu" if self.gpu else "cpu"
+
+    def make_allocator(self) -> next_allocators.FieldBufferAllocatorProtocol:
+        if self.gpu:
+            return next_allocators.StandardGPUFieldBufferAllocator()
+        return next_allocators.StandardCPUFieldBufferAllocator()

@@ -8,7 +8,8 @@
 
 import dataclasses
 import enum
-from typing import ClassVar, Optional, Type
+import functools
+from typing import Callable, ClassVar, Optional, Type
 
 from gt4py import eve
 from gt4py.next.iterator import ir
@@ -71,15 +72,23 @@ class CombinedFixedPointTransform(FixedPointTransformation):
     #: Usually the default value is chosen to be all transformations.
     enabled_transformations: enum.Flag
 
-    def transform(self, node: ir.Node, **kwargs) -> Optional[ir.Node]:
+    @functools.cached_property
+    def _enabled_transformation_methods(self) -> tuple[tuple[str, Callable], ...]:
+        # `transform` runs for every node, and `enum.Flag` operations are slow.
+        result = []
         for transformation in self.Transformation:
             if self.enabled_transformations & transformation:
                 assert isinstance(transformation.name, str)
-                method = getattr(self, f"transform_{transformation.name.lower()}")
-                result = method(node, **kwargs)
-                if result is not None:
-                    assert result is not node, (
-                        f"Transformation {transformation.name.lower()} should have returned None, since nothing changed."
-                    )
-                    return result
+                name = transformation.name.lower()
+                result.append((name, getattr(self, f"transform_{name}")))
+        return tuple(result)
+
+    def transform(self, node: ir.Node, **kwargs) -> Optional[ir.Node]:
+        for name, method in self._enabled_transformation_methods:
+            result = method(node, **kwargs)
+            if result is not None:
+                assert result is not node, (
+                    f"Transformation {name} should have returned None, since nothing changed."
+                )
+                return result
         return None

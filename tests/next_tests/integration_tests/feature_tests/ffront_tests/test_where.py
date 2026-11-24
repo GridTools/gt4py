@@ -20,6 +20,7 @@ from next_tests.integration_tests.cases_utils import (
 )
 
 
+@pytest.mark.uses_scalar_in_domain
 @pytest.mark.uses_cartesian_shift
 def test_where_k_offset(cartesian_case):
     @gtx.field_operator
@@ -186,6 +187,20 @@ def test_conditional_promotion(cartesian_case):
     ref = np.where(mask.asnumpy(), a.asnumpy(), 10.0)
 
     cases.verify(cartesian_case, conditional_promotion, mask, a, out=out, ref=ref)
+
+
+def test_conditional_scalar_branches(cartesian_case):
+    @gtx.field_operator
+    def conditional_scalars(mask: cases.IBoolField) -> cases.IFloatField:
+        return where(mask, 1.0, 0.0)
+
+    size = cartesian_case.default_sizes[IDim]
+    mask = cartesian_case.as_field([IDim], np.random.choice(a=[False, True], size=(size)))
+    out = cases.allocate(cartesian_case, conditional_scalars, cases.RETURN)()
+
+    cases.verify(
+        cartesian_case, conditional_scalars, mask, out=out, ref=np.where(mask.asnumpy(), 1.0, 0.0)
+    )
 
 
 def test_conditional_compareop(cartesian_case):

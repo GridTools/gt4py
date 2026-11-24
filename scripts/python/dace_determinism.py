@@ -1,4 +1,4 @@
-#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --group scripts python3
+#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --only-group scripts python3
 #
 # GT4Py - GridTools Framework
 #
@@ -327,8 +327,10 @@ def render_report(results: list[ComparisonResult], *, runs_healthy: bool | None 
 
     skip_label = "count-mismatch" if skips_fail else "skipped"
     lines = [
-        f"Programs: {n_total}    comparable: {n_comparable}    matches: {n_match}    "
-        f"differs: {n_differ}    {skip_label}: {n_skipped}",
+        (
+            f"Programs: {n_total}    comparable: {n_comparable}    matches: {n_match}    "
+            f"differs: {n_differ}    {skip_label}: {n_skipped}"
+        ),
         "",
     ]
     for r in results:
@@ -412,7 +414,7 @@ def check_determinism(
         raise NoSourceFilesObservedError(
             f"program(s) cached ({n_folders1} in run1, {n_folders2} in run2) but none "
             f"contain source files under {CODEGEN_DIR}/. Set "
-            f"DACE_compiler_build_folder_mode=development so the generated code is kept "
+            f"GT4PY_KEEP_DACE_BUILD_FILES=true to keep the generated code "
             f"after compilation."
         )
 
@@ -520,7 +522,7 @@ def _env_for_run(run_dir: Path) -> dict[str, str]:
     # GT4PY_BUILD_CACHE_LIFETIME to `persistent` keeps the cache around long
     # enough for the comparison to read it.
     #
-    # Setting DACE_compiler_build_folder_mode to `development` is REQUIRED: gt4py
+    # Setting GT4PY_KEEP_DACE_BUILD_FILES=true` is REQUIRED: gt4py
     # configures dace to `production` mode by default, which cleans up the dace
     # build folder after compilation — leaving only the compiled .so and
     # stripping the codegen sources we need to diff. Forcing `development` keeps
@@ -530,7 +532,7 @@ def _env_for_run(run_dir: Path) -> dict[str, str]:
     return {
         "GT4PY_BUILD_CACHE_DIR": str(run_dir),
         "GT4PY_BUILD_CACHE_LIFETIME": "persistent",
-        "DACE_compiler_build_folder_mode": "development",
+        "GT4PY_KEEP_DACE_BUILD_FILES": "true",
     }
 
 

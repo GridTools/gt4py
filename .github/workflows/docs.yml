@@ -1,0 +1,80 @@
+name: Documentation
+
+# Builds the user documentation site (welcome page plus the 'gt4py.cartesian'
+# and 'gt4py.next' subsites) and deploys it to GitHub Pages (which must use
+# 'GitHub Actions' as source) when a version is released, or on request:
+#
+# - On every pull request the site is only built (and uploaded as an artifact).
+#   There is no 'paths' filter, so that the build can be a required status
+#   check: a required check from a workflow skipped by a path filter would stay
+#   pending forever.
+# - When a (non-prerelease) GitHub release is published, the site is built from
+#   the release tag and deployed.
+# - Manually, at any time: run this workflow with the 'deploy' input enabled
+#   from the 'main' branch (to publish the current documentation) or from a
+#   release tag (e.g. to fix the documentation of the latest release without
+#   making a new one). On any other ref the deployment is skipped.
+#
+# The 'github-pages' environment must allow deployments from 'main' and from
+# the release tags (deployment branches and tags policy: 'main' and 'v*').
+
+on:
+  pull_request:
+    branches:
+      - main
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      deploy:
+        description: "Deploy the site to GitHub Pages (only effective when run from 'main' or from a tag)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Build the documentation site
+        shell: bash
+        run: ./noxfile.py -s docs
+
+      - name: Upload the built site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/user/_build/html
+
+  deploy:
+    needs: build
+    if: >-
+      github.repository == 'GridTools/gt4py' && (
+        (github.event_name == 'release' && !github.event.release.prerelease) ||
+        (github.event_name == 'workflow_dispatch' && inputs.deploy &&
+          (github.ref == 'refs/heads/main' || github.ref_type == 'tag'))
+      )
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: docs-deploy
+      cancel-in-progress: false
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

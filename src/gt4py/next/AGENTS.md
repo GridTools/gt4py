@@ -79,7 +79,9 @@ Next tests run across a **backend matrix** (embedded NumPy/CuPy/JAX, `gtfn`,
   the backend. A new feature marker must be added to both places. Markers also
   serve as a queryable feature index (`pytest -m uses_<feature>`); only markers
   in `BACKEND_SKIP_TEST_MATRIX` affect execution (the rest are index-only and
-  safe to add) — see the note next to that matrix in `definitions.py`.
+  safe to add) — see the note next to that matrix in `definitions.py`. The one
+  exception is `uses_dace`, which selects the nox matrix: adding it to a test
+  drops that test from every `internal` session.
 - Layout: `unit_tests/` (per-module, backend-free), `feature_tests/` (one DSL
   feature across the matrix), `multi_feature_tests/` (end-to-end programs).
   Place a test in the file for the feature it is the *subject* of (see
@@ -88,4 +90,7 @@ Next tests run across a **backend matrix** (embedded NumPy/CuPy/JAX, `gtfn`,
   finds it regardless of which file it lives in).
 - Run with `uv run pytest tests/next_tests/ -x -q`; matrix-level confidence
   comes from `uv run nox -s "test_next-<py>(...)"`. GPU sessions
-  may be unavailable locally and will skip.
+  may be unavailable locally and will skip. Tests carrying a `requires_*`
+  marker (`requires_gpu`, `requires_jax`, `requires_atlas`)
+  are skipped automatically when that dependency is missing; pass
+  `--require-optional-deps` to turn those skips back into real failures.

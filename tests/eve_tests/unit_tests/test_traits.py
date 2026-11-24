@@ -8,10 +8,11 @@
 
 from __future__ import annotations
 
+from typing import Any, ClassVar
+
 import pytest
 
 from gt4py import eve
-from gt4py.eve.extended_typing import Any, ClassVar, List
 
 from .. import definitions
 
@@ -34,7 +35,7 @@ class _NodeWithSymbolName(eve.Node):
 
 
 class _NodeWithSymbolTable(eve.Node, eve.SymbolTableTrait):
-    symbols: List[_NodeWithSymbolName]
+    symbols: list[_NodeWithSymbolName]
 
 
 @pytest.fixture
@@ -75,9 +76,9 @@ class TestSymbolTable:
             ref_name: eve.Coerced[eve.SymbolRef]
 
         class NodeWithSymbolTable(eve.Node, eve.traits.ValidatedSymbolTableTrait):
-            symbols: List[NodeWithRef]
+            symbols: list[NodeWithRef]
 
-            _NODE_SYMBOLS_: ClassVar[List] = []
+            _NODE_SYMBOLS_: ClassVar[list] = []
 
         NodeWithSymbolTable.update_forward_refs(locals())
 

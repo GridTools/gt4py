@@ -42,7 +42,12 @@ scripts/
 **Python scripts**
 
 - Start with the uv shebang for automatic dependency isolation:
-  `#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --group scripts python3`
+  `#!/usr/bin/env -S uv run -q --frozen --isolated --python 3.12 --only-group scripts python3`
+- The shebang environment contains only the `scripts` group: gt4py itself is
+  **not** installed. A script that needs gt4py must run it through a separate
+  interpreter (e.g. a `--python` option, as `dace_determinism.py` does) or be
+  run with `uv run python scripts/python/<name>.py`. `./scripts/test` adds the
+  `test` group on top of `scripts`.
 - Expose a global `cli = typer.Typer(...)` app.
 - Call it under `if __name__ == "__main__": cli()` so the module also runs
   standalone.

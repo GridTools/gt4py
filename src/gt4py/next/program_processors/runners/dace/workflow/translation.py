@@ -9,16 +9,16 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Optional
+from typing import Any, Final, Literal, Optional
 
 import dace
-import factory
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import code_specs, definitions, stages, workflow
+from gt4py.next.iterator.transforms import scan_fusion as gtx_scan_fusion
+from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace import (
     lowering as gtx_dace_lowering,
@@ -207,7 +207,7 @@ def add_instrumentation(sdfg: dace.SDFG, gpu: bool) -> None:
     tlet_start_timer = begin_state.add_tasklet(
         "gt_start_timer",
         inputs={},
-        outputs={"time"},
+        outputs={"time": None},
         code=f"""\
 {sync_code}
 auto now = std::chrono::high_resolution_clock::now();
@@ -239,8 +239,8 @@ time = std::chrono::duration_cast<std::chrono::nanoseconds>(
     # Populate the branch that computes the stencil time metric
     tlet_stop_timer = end_state.add_tasklet(
         "gt_stop_timer",
-        inputs={"run_cpp_start_time"},
-        outputs={"duration"},
+        inputs={"run_cpp_start_time": None},
+        outputs={"duration": None},
         code=f"""\
 {sync_code}
 auto now = std::chrono::high_resolution_clock::now();
@@ -324,8 +324,8 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     assert dace_gpu_backend in ["cuda", "hip"], f"GPU backend '{dace_gpu_backend}' is unknown."
     sync_state.add_tasklet(
         "sync_tlet",
-        inputs=set(),
-        outputs=set(),
+        inputs={},
+        outputs={},
         code=f"{dace_gpu_backend}StreamSynchronize({dace_gpu_backend}StreamDefault);",
         language=dace.dtypes.Language.CPP,
         side_effects=True,
@@ -340,14 +340,70 @@ def make_sdfg_call_sync(sdfg: dace.SDFG, gpu: bool) -> None:
     )
 
 
+#: The parameters of `gt_auto_optimize()` that the translation step derives from
+#: its own configuration, and which therefore cannot be customized.
+_DERIVED_OPTIMIZATION_ARGS: Final[frozenset[str]] = frozenset(
+    {"gpu", "constant_symbols", "unit_strides_kind"}
+)
+
+#: The accepted values of the `scan_fusion_scope` option in `auto_optimize_args`.
+_SCAN_FUSION_SCOPES: Final[frozenset[str]] = frozenset({"immediate", "field_operator"})
+
+
+def _preprocess_program(
+    ir: itir.Program,
+    offset_provider: common.OffsetProvider,
+    fuse_scan_inputs: bool,
+    scan_fusion_scope: Literal["immediate", "field_operator"],
+    use_max_domain_range_on_unstructured_shift: bool | None,
+) -> itir.Program:
+    """
+    Prepare scan producers and normalize field expressions before lowering.
+
+    `fuse_scan_inputs` enables bounded scan-input fusion when auto-optimization
+    is enabled. It is implemented as an ITIR transformation, therefore it is applied
+    before lowering to SDFG. The `scan_fusion_scope="immediate"` argument considers
+    one producer layer; `"field_operator"` first combines local arithmetic within
+    function boundaries.
+    """
+    if fuse_scan_inputs and scan_fusion_scope == "field_operator":
+        ir = gtx_scan_fusion.normalize_scan_producers(
+            ir, offset_provider_type=common.offset_provider_to_type(offset_provider)
+        )
+
+    ir = itir_transforms.apply_fieldview_transforms(
+        ir,
+        offset_provider=offset_provider,
+        use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
+    )
+
+    if fuse_scan_inputs:
+        offset_provider_type = common.offset_provider_to_type(offset_provider)
+        fused = gtx_scan_fusion.fuse_scan_inputs(ir, offset_provider_type=offset_provider_type)
+        if fused is not ir:
+            # Fusion introduces field expressions whose domains need refreshing.
+            ir = itir_transforms.apply_fieldview_transforms(
+                fused,
+                offset_provider=offset_provider,
+                use_max_domain_range_on_unstructured_shift=use_max_domain_range_on_unstructured_shift,
+            )
+
+    return ir
+
+
 @dataclasses.dataclass(frozen=True)
 class DaCeTranslator(
     workflow.ChainableWorkflowMixin[
-        definitions.CompilableProgramDef,
-        stages.ProgramSource[code_specs.SDFGCodeSpec],
+        stages.CompilableProgramDef,
+        artifacts.ProgramSource[artifacts.SDFGCodeSpec],
     ],
-    definitions.TranslationStep[code_specs.SDFGCodeSpec],
+    workflow.ReplaceEnabledWorkflowMixin[
+        stages.CompilableProgramDef,
+        artifacts.ProgramSource[artifacts.SDFGCodeSpec],
+    ],
 ):
+    """Lower iterator IR and configure the generated SDFG."""
+
     device_type: core_defs.DeviceType
     auto_optimize: bool
     auto_optimize_args: dict[str, Any] | None
@@ -355,9 +411,24 @@ class DaCeTranslator(
     unstructured_horizontal_has_unit_stride: bool
     use_metrics: bool
 
-    disable_itir_transforms: bool = False
     disable_field_origin_on_program_arguments: bool = False
     use_max_domain_range_on_unstructured_shift: bool | None = None
+
+    def __post_init__(self) -> None:
+        if self.auto_optimize_args and (
+            derived_args := self.auto_optimize_args.keys() & _DERIVED_OPTIMIZATION_ARGS
+        ):
+            raise ValueError(
+                f"The following optimization arguments cannot be overridden: {derived_args}."
+            )
+        if (
+            self.auto_optimize_args
+            and (scope := self.auto_optimize_args.get("scan_fusion_scope", "immediate"))
+            not in _SCAN_FUSION_SCOPES
+        ):
+            raise ValueError(
+                f"Invalid 'scan_fusion_scope' {scope!r}, expected one of {sorted(_SCAN_FUSION_SCOPES)}."
+            )
 
     def generate_sdfg(
         self,
@@ -373,16 +444,26 @@ class DaCeTranslator(
         offset_provider: common.OffsetProvider,
         column_axis: Optional[common.Dimension],
     ) -> dace.SDFG:
-        if not self.disable_itir_transforms:
-            ir = itir_transforms.apply_fieldview_transforms(
-                ir,
-                use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
-                offset_provider=offset_provider,
-            )
         offset_provider_type = common.offset_provider_to_type(offset_provider)
         on_gpu = self.device_type != core_defs.DeviceType.CPU
 
-        sdfg = gtx_dace_lowering.build_sdfg_from_gtir(ir, offset_provider_type, column_axis)
+        # `fuse_scan_inputs` enables bounded scan-input fusion when auto-optimization
+        # is enabled. It is implemented as an ITIR transformation, therefore it is applied
+        # before lowering to SDFG.
+        # The corresponding arguments are removed from (a copy of) `auto_optimize_args`
+        # to avoid passing them to `gt_auto_optimize()`.
+        auto_optimize_args = dict(self.auto_optimize_args or {})
+        fuse_scan_inputs = auto_optimize_args.pop("fuse_scan_inputs", False)
+        scan_fusion_scope = auto_optimize_args.pop("scan_fusion_scope", "immediate")
+        ir = _preprocess_program(
+            ir=ir,
+            offset_provider=offset_provider,
+            fuse_scan_inputs=(self.auto_optimize and fuse_scan_inputs),
+            scan_fusion_scope=scan_fusion_scope,
+            use_max_domain_range_on_unstructured_shift=self.use_max_domain_range_on_unstructured_shift,
+        )
+
+        sdfg = gtx_dace_lowering.lower_program_to_sdfg(ir, offset_provider_type, column_axis)
 
         constant_symbols = find_constant_symbols(
             ir,
@@ -393,12 +474,15 @@ class DaCeTranslator(
         )
 
         if self.auto_optimize:
-            auto_optimize_args = {} if self.auto_optimize_args is None else self.auto_optimize_args
-
             gtx_transformations.gt_auto_optimize(
                 sdfg,
                 gpu=on_gpu,
                 constant_symbols=constant_symbols,
+                unit_strides_kind=(
+                    common.DimensionKind.HORIZONTAL
+                    if self.unstructured_horizontal_has_unit_stride
+                    else None
+                ),
                 **auto_optimize_args,
             )
         elif on_gpu:
@@ -416,13 +500,6 @@ class DaCeTranslator(
 
         elif len(constant_symbols) != 0:
             # Target CPU without SDFG transformations, but still replace constant symbols.
-            # Replacing the SDFG symbols for field origin in global arrays is strictly
-            # required by dace orchestration, which runs the translation stage
-            # with `disable_field_origin_on_program_arguments=True`. The program
-            # decorator used by dace orchestartion cannot handle field origin.
-            # It also requires skipping auto-optimize on the `SDFGConvertible` objects,
-            # because it targets the full-application SDFG, so we have to explicitly
-            # apply `gt_substitute_compiletime_symbols()` here.
             gtx_transformations.gt_substitute_compiletime_symbols(
                 sdfg, constant_symbols, validate=True
             )
@@ -438,8 +515,8 @@ class DaCeTranslator(
         return sdfg
 
     def __call__(
-        self, inp: definitions.CompilableProgramDef
-    ) -> stages.ProgramSource[code_specs.SDFGCodeSpec]:
+        self, inp: stages.CompilableProgramDef
+    ) -> artifacts.ProgramSource[artifacts.SDFGCodeSpec]:
         """Generate DaCe SDFG file from the GTIR definition."""
         program: itir.Program = inp.data
         assert isinstance(program, itir.Program)
@@ -457,15 +534,10 @@ class DaCeTranslator(
             for param, arg_type in zip(program.params, arg_types)
         )
 
-        module: stages.ProgramSource[code_specs.SDFGCodeSpec] = stages.ProgramSource(
+        module: artifacts.ProgramSource[artifacts.SDFGCodeSpec] = artifacts.ProgramSource(
             entry_point=interface.Function(program.id, program_parameters),
             source_code=gtx_wfdcommon.serialize_sdfg_as_json(sdfg),  # type: ignore[arg-type] # The source code is typed as a `str`, but we assign a JSON dictionary.
             library_deps=tuple(),
-            code_spec=code_specs.SDFGCodeSpec(),
+            code_spec=artifacts.SDFGCodeSpec(),
         )
         return module
-
-
-class DaCeTranslationStepFactory(factory.Factory):
-    class Meta:
-        model = DaCeTranslator

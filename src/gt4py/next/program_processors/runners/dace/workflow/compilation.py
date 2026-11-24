@@ -18,11 +18,11 @@ from typing import Any, Final, TypeAlias
 
 import dace
 import dace.codegen.compiler as dace_compiler
-import factory
 
 from gt4py._core import definitions as core_defs, locking
+from gt4py.eve import xtyping
 from gt4py.next import common, config, fingerprinting
-from gt4py.next.otf import code_specs, definitions, stages, workflow
+from gt4py.next.otf import artifacts, workflow
 from gt4py.next.otf.compilation import cache as gtx_cache
 from gt4py.next.program_processors.runners.dace.workflow import (
     common as gtx_wfdcommon,
@@ -33,8 +33,8 @@ from gt4py.next.program_processors.runners.dace.workflow import (
 _COMPILE_COMPLETE_MARKER: Final = ".gt4py_compile_complete"
 
 
-SDFGExtensionSource: TypeAlias = stages.ExtensionSource[
-    code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec
+SDFGExtensionSource: TypeAlias = artifacts.ExtensionSource[
+    artifacts.SDFGCodeSpec, artifacts.PythonCodeSpec
 ]
 
 
@@ -70,6 +70,60 @@ def _add_tx_markers(program_source: SDFGExtensionSource) -> tuple[SDFGExtensionS
     return new_program_source, sdfg
 
 
+def _map_storage_to_device(storage: dace.StorageType) -> core_defs.DeviceType:
+    if storage == dace.StorageType.CPU_Heap:
+        device = core_defs.DeviceType.CPU
+    elif storage == dace.StorageType.GPU_Global:
+        if core_defs.CUPY_DEVICE_TYPE is None:
+            raise ValueError(
+                f"Can not map storage type '{storage}' to a device: no GPU device"
+                " type is configured ('core_defs.CUPY_DEVICE_TYPE' is None)."
+            )
+        device = core_defs.CUPY_DEVICE_TYPE
+    else:
+        raise ValueError(f"Unsupported storage type '{storage}' for external workspace allocation.")
+
+    return device
+
+
+def _validate_external_workspace(
+    wsp: xtyping.ArrayInterface | xtyping.CUDAArrayInterface,
+    storage: dace.StorageType,
+    nbytes: int,
+) -> None:
+    """Validate that the provided ``wsp`` workspace satisfies the requirements.
+
+    Args:
+        wsp: The external workspace to check.
+        storage: SDFG storage type the workspace buffer is being installed for.
+        nbytes: Size in bytes required.
+
+    Raises:
+        TypeError: If ``wsp`` exposes neither ``__array_interface__`` nor
+            ``__cuda_array_interface__``.
+        ValueError: If ``wsp`` exposes ``nbytes`` and it is smaller than the
+            required ``nbytes``. Buffers that do not expose ``nbytes`` are
+            accepted on a trust basis (their size can not be checked here).
+    """
+    if storage == dace.StorageType.GPU_Global:
+        if not xtyping.supports_cuda_array_interface(wsp):
+            raise TypeError(
+                f"External workspace for storage {storage!r} must expose `__cuda_array_interface__` (got {type(wsp).__name__!r})."
+            )
+    elif storage == dace.StorageType.CPU_Heap:
+        if not xtyping.supports_array_interface(wsp):
+            raise TypeError(
+                f"External workspace for storage {storage!r} must expose `__array_interface__` (got {type(wsp).__name__!r})."
+            )
+    else:
+        raise ValueError(f"Unsupported storage type {storage!r} for external workspace allocation.")
+
+    if (wsp_nbytes := getattr(wsp, "nbytes", None)) is not None and wsp_nbytes < nbytes:
+        raise ValueError(
+            f"External workspace buffer is {wsp_nbytes} bytes for storage {storage!r}, but at least {nbytes} bytes were required."
+        )
+
+
 class CompiledDaceProgram:
     sdfg_program: dace.CompiledSDFG
 
@@ -96,6 +150,9 @@ class CompiledDaceProgram:
     #       never updated.
     csdfg_argv: MutableSequence[Any] | None
     csdfg_init_argv: Sequence[Any] | None
+    external_workspace: gtx_wfdcommon.ExternalWorkspace | None = (
+        None  # This attribute is set at runtime, before the first call.
+    )
 
     def __init__(
         self,
@@ -122,6 +179,22 @@ class CompiledDaceProgram:
         self.csdfg_argv = None
         self.csdfg_init_argv = None
 
+    def _configure_external_workspace(self, **kwargs: Any) -> None:
+        self.sdfg_program.initialize(**kwargs)
+        if workspace_sizes := self.sdfg_program.get_workspace_sizes():
+            if self.external_workspace is None:
+                raise RuntimeError(
+                    "External workspace is not set. Please call `set_external_workspace()`"
+                    " before the first call to the program."
+                )
+            for storage, required_nbytes in workspace_sizes.items():
+                device = _map_storage_to_device(storage)
+                workspace = self.external_workspace.get(device)
+                if workspace is None:
+                    raise RuntimeError(f"External workspace for device {device} not found.")
+                _validate_external_workspace(workspace, storage, required_nbytes)
+                self.sdfg_program.set_workspace(storage, workspace)
+
     def construct_arguments(self, **kwargs: Any) -> None:
         """
         This function will process the arguments and store the processed argument
@@ -129,6 +202,7 @@ class CompiledDaceProgram:
         """
         with dace.config.set_temporary("compiler", "allow_view_arguments", value=True):
             csdfg_argv, csdfg_init_argv = self.sdfg_program.construct_arguments(**kwargs)
+            self._configure_external_workspace(**kwargs)
         # Note we only care about `csdfg_argv` (normal call), since we have to update it,
         #  we ensure that it is a `list`.
         self.csdfg_argv = [*csdfg_argv]
@@ -184,27 +258,26 @@ class DaCeCompilationArtifact:
     bind_func_name: str
     device_type: core_defs.DeviceType
 
-    def load(self) -> stages.ExecutableProgram:
+    def load(self) -> artifacts.ExecutableProgram:
         # TODO(phimuell): Drop ``sdfg_json`` from the artifact once dace
         #   exposes a load path that doesn't require an SDFG instance to wrap
         #   into the returned ``CompiledSDFG``.
         sdfg = dace.SDFG.from_json(json.loads(self.sdfg_json))
         sdfg_program = dace_compiler.get_program_handle(self.library_path, sdfg)
         program = CompiledDaceProgram(sdfg_program, self.bind_func_name, self.binding_source_code)
-        return gtx_wfddecoration.convert_args(program, device=self.device_type)
+        return gtx_wfddecoration.DaCeDecoratedProgram(program, device_type=self.device_type)
 
 
 @dataclasses.dataclass(frozen=True)
 class DaCeCompiler(
     workflow.ChainableWorkflowMixin[
-        stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        artifacts.ExtensionSource[artifacts.SDFGCodeSpec, artifacts.PythonCodeSpec],
         DaCeCompilationArtifact,
     ],
     workflow.ReplaceEnabledWorkflowMixin[
-        stages.ExtensionSource[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
+        artifacts.ExtensionSource[artifacts.SDFGCodeSpec, artifacts.PythonCodeSpec],
         DaCeCompilationArtifact,
     ],
-    definitions.CompilationStep[code_specs.SDFGCodeSpec, code_specs.PythonCodeSpec],
 ):
     """Run the DaCe build system and produce an on-disk ``DaCeCompilationArtifact``."""
 
@@ -250,26 +323,38 @@ class DaCeCompiler(
             # Configure the SDFG build folder
             sdfg.build_folder = sdfg_build_folder
 
-            # ``build_folder_mode`` is set by ``dace_context``; resolve the library
-            # path here so ``get_binary_name`` sees the same mode dace built under.
-            library_path = dace_compiler.get_binary_name(
-                object_folder=sdfg_build_folder, sdfg_name=sdfg.name
-            )
-
             with locking.lock(sdfg_build_folder):
                 # With `compiler.use_cache=True` dace reuses a cached library on mere
                 # *existence*, without validating it; an interrupted build can leave a
-                # truncated, unloadable library behind. The marker is written only
-                # after a completed compile: no marker -> drop the stale library so
-                # dace rebuilds it instead of handing it out.
+                # truncated, unloadable library behind, or a `FOLDER_MODE` file that was
+                # created but never written, which dace refuses as an unknown mode. The
+                # marker is written only after a completed compile: no marker -> drop
+                # both so dace rebuilds instead of handing out or choking on them.
                 marker = sdfg_build_folder / _COMPILE_COMPLETE_MARKER
-                if not marker.exists():
+                build_complete = marker.exists()
+                if not build_complete:
+                    (sdfg_build_folder / "FOLDER_MODE").unlink(missing_ok=True)
+
+                # `get_binary_name` reads the folder mode from the build folder before it
+                # falls back to the dace config, and a concurrent build may have created
+                # but not yet written the mode file: only probe the folder under the lock.
+                library_path = dace_compiler.get_binary_name(
+                    object_folder=sdfg_build_folder, sdfg_name=sdfg.name
+                )
+
+                if not build_complete:
                     for stale in (
                         library_path,
                         *sdfg_build_folder.glob(f"libdacestub_{sdfg.name}.*"),
                     ):
                         stale.unlink(missing_ok=True)
-                marker.unlink(missing_ok=True)
+                # On a cache hit `sdfg.compile` writes nothing: keep the marker, or an
+                # interruption would make the next compile delete a complete library that
+                # other processes may be loading. `use_cache` is not implied by
+                # `dace_context`: a `DACE_compiler_use_cache` env var overrides the value
+                # set there, and with it off dace rebuilds over the existing library.
+                if not (dace.Config.get_bool("compiler", "use_cache") and library_path.is_file()):
+                    marker.unlink(missing_ok=True)
                 sdfg.compile(validate=False, return_program_handle=False)
                 marker.touch()
 
@@ -281,8 +366,3 @@ class DaCeCompiler(
             bind_func_name=self.bind_func_name,
             device_type=self.device_type,
         )
-
-
-class DaCeCompilationStepFactory(factory.Factory):
-    class Meta:
-        model = DaCeCompiler

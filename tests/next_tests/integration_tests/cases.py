@@ -24,15 +24,14 @@ import functools
 import inspect
 import types
 import typing
-from typing import Any, Callable, Literal, Optional, Mapping, Protocol, TypeAlias
+from typing import Any, Callable, Literal, Optional, Mapping, Protocol, Self, TypeAlias
 
 import numpy as np
 import pytest
+import typing_extensions
 
 import gt4py.next as gtx
 from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
-from gt4py.eve.extended_typing import Self
 from gt4py.next import (
     backend as next_backend,
     common,
@@ -397,6 +396,11 @@ def allocate(
     )
 
 
+def runs_embedded(case: Case) -> bool:
+    """Whether the case's programs run embedded, i.e. are not compiled."""
+    return case.backend is None or isinstance(case.backend, next_backend.EmbeddedBackend)
+
+
 def run(
     case: Case,
     fieldview_prog: decorator.FieldOperator | decorator.Program,
@@ -645,7 +649,7 @@ def get_param_types(
         raise ValueError(
             f"test cases do not support '{type(fieldview_prog)}' with empty .definition attribute (as you would get from .as_program())."
         )
-    annotations = xtyping.get_type_hints(fieldview_prog.definition)
+    annotations = typing_extensions.get_type_hints(fieldview_prog.definition)
     return {
         name: type_translation.from_type_hint(type_hint) for name, type_hint in annotations.items()
     }

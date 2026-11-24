@@ -34,8 +34,7 @@ class CompilationOptions:
 
     # TODO(ricoh): replace with common.OffsetProviderType once the temporary pass doesn't require the runtime information
     #: A dictionary holding static/compile-time information about the offset providers.
-    #: For now, it is used for ahead of time compilation in DaCe orchestrated programs,
-    #: i.e. DaCe programs that call GT4Py Programs -SDFGConvertible interface-.
+    #: Used as the offset provider in `compile` when none is passed explicitly.
     connectivities: common.OffsetProvider | None = None
 
     static_domains: bool = False

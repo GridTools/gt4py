@@ -50,7 +50,7 @@ def promote_zero_dims(
                     # the argument unpromoted and let the further error handling take care of printing
                     # a meaningful error.
                     return arg_el
-                param_el = param_el.types[idx]  # type: ignore[attr-defined] # checked in condition above
+                param_el = param_el.types[idx]
 
             if _is_zero_dim_field(param_el) and (
                 type_info.is_arithmetic_scalar(arg_el) or type_info.is_logical(arg_el)
@@ -391,13 +391,13 @@ def type_in_program_context(callable_type: ts.CallableType) -> ProgramType | ts.
     return callable_type
 
 
-def _signature_from_callable_in_program_context(
+def signature_in_program_context(
     callable_type: ts.CallableType,
 ) -> inspect.Signature:
     if isinstance(callable_type, ts_ffront.ProgramType):
-        return _signature_from_callable_in_program_context(callable_type.definition)
+        return signature_in_program_context(callable_type.definition)
     elif isinstance(callable_type, ts_ffront.FieldOperatorType | ts_ffront.ScanOperatorType):
-        operator_signature = _signature_from_callable_in_program_context(callable_type.definition)
+        operator_signature = signature_in_program_context(callable_type.definition)
         params = list(operator_signature.parameters.values())
         if isinstance(callable_type, ts_ffront.ScanOperatorType):
             params = params[1:]  # Remove the carry state arg
@@ -435,6 +435,4 @@ def make_args_canonicalizer(
 
     See :ref:`utils.make_args_canonicalizer`.
     """
-    return utils.make_args_canonicalizer(
-        _signature_from_callable_in_program_context(callable_type), **kwargs
-    )
+    return utils.make_args_canonicalizer(signature_in_program_context(callable_type), **kwargs)

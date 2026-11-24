@@ -6,10 +6,12 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+from enum import IntEnum
 import numpy as np
 import pytest
 
 from gt4py import storage as gt_storage
+from gt4py._core import definitions as core_defs
 from gt4py.cartesian import gtscript
 from gt4py.cartesian.frontend import gtscript_frontend
 from gt4py.cartesian.gtscript import (
@@ -731,6 +733,24 @@ def test_higher_dim_scalar_stencil(backend) -> None:
 
 
 @pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_ddims_with_numpy_type(backend: str) -> None:
+    @gtscript.stencil(backend=backend)
+    def data_dims_with_numpy_int_type(
+        out_field: gtscript.Field[gtscript.IJK, np.int32],  # type: ignore
+        in_field: gtscript.Field[gtscript.IJK, (np.int32, (np.int32(3)))],  # type: ignore
+    ):
+        with computation(PARALLEL), interval(...):
+            out_field = in_field.A[0]
+
+    in_field = gt_storage.ones((2, 2, 4), (np.int32, (np.int32(3))), backend=backend)
+    out_field = gt_storage.zeros((2, 2, 4), np.int32, backend=backend)
+
+    data_dims_with_numpy_int_type(out_field, in_field)
+    cpu_output = storage_utils.cpu_copy(out_field)
+    np.testing.assert_allclose(cpu_output.view(np.ndarray)[:, :, :], 1)
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
 def test_native_function_call_stencil(backend) -> None:
     field_in = gt_storage.ones(
         dtype=np.float64, backend=backend, shape=(4, 4, 4), aligned_index=(0, 0, 0)
@@ -1252,8 +1272,8 @@ def test_absolute_K_index_raise(backend) -> None:
     "backend",
     [
         pytest.param("debug"),
-        pytest.param("dace:cpu", marks=[pytest.mark.requires_dace]),
-        pytest.param("dace:gpu", marks=[pytest.mark.requires_dace, pytest.mark.requires_gpu]),
+        pytest.param("dace:cpu", marks=[pytest.mark.uses_dace]),
+        pytest.param("dace:gpu", marks=[pytest.mark.uses_dace, pytest.mark.requires_gpu]),
     ],
 )
 def test_absolute_K_index(backend) -> None:
@@ -1370,7 +1390,7 @@ def test_absolute_K_index(backend) -> None:
 
 @pytest.mark.parametrize(
     "backend",
-    ["debug", "numpy", pytest.param("dace:cpu", marks=[pytest.mark.requires_dace])],
+    ["debug", "numpy", pytest.param("dace:cpu", marks=[pytest.mark.uses_dace])],
 )
 def test_iterator_access(backend: str) -> None:
     domain = (3, 4, 5)
@@ -1514,7 +1534,7 @@ def test_runtime_interval_bounds() -> None:
                     raises=NotImplementedError,
                     reason="Runtime interval bounds not implemented yet.",
                 ),
-                pytest.mark.requires_dace,
+                pytest.mark.uses_dace,
             ],
         ),
         pytest.param(
@@ -1524,7 +1544,7 @@ def test_runtime_interval_bounds() -> None:
                     raises=NotImplementedError,
                     reason="Runtime interval bounds not implemented yet.",
                 ),
-                pytest.mark.requires_dace,
+                pytest.mark.uses_dace,
                 pytest.mark.requires_gpu,
             ],
         ),
@@ -1556,8 +1576,8 @@ def test_runtime_interval_raises(backend) -> None:
     [
         pytest.param("debug"),
         pytest.param("numpy"),
-        pytest.param("dace:cpu", marks=[pytest.mark.requires_dace]),
-        pytest.param("dace:gpu", marks=[pytest.mark.requires_dace, pytest.mark.requires_gpu]),
+        pytest.param("dace:cpu", marks=[pytest.mark.uses_dace]),
+        pytest.param("dace:gpu", marks=[pytest.mark.uses_dace, pytest.mark.requires_gpu]),
     ],
 )
 def test_2d_temporaries(backend) -> None:
@@ -1793,18 +1813,8 @@ def test_reset_mask_2d(backend: str) -> None:
     "backend",
     [
         "debug",
-        pytest.param("dace:cpu", marks=[pytest.mark.requires_dace]),
-        pytest.param(
-            "dace:gpu",
-            marks=[
-                pytest.mark.requires_dace,
-                pytest.mark.requires_gpu,
-                pytest.mark.xfail(
-                    raises=SystemExit,
-                    reason="DaCe issue: Missing `_gbar` symbol for global sync inside nested SDFG.",
-                ),
-            ],
-        ),
+        pytest.param("dace:cpu", marks=[pytest.mark.uses_dace]),
+        pytest.param("dace:gpu", marks=[pytest.mark.uses_dace, pytest.mark.requires_gpu]),
         pytest.param("gt:gpu", marks=[pytest.mark.requires_gpu]),
     ],
 )
@@ -1835,3 +1845,56 @@ def test_offset_j_in_temporaries(backend: str) -> None:
                 if isnan(sqrt_res)
                 else 0.0
             )
+
+
+@gtscript.enum
+class MyEnum(IntEnum):
+    Zero = 0
+    A = 10
+    B = 20
+    C = 30
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_enum_runtime(backend):
+
+    @gtscript.stencil(backend=backend)
+    def the_stencil(out_field: Field[int], order: MyEnum):  # type: ignore
+        with computation(PARALLEL), interval(0, 1):
+            out_field = 32
+            if order < MyEnum.A:
+                out_field = MyEnum.A
+
+        with computation(PARALLEL), interval(1, 2):
+            out_field = 23
+            out_field = MyEnum.B
+
+        with computation(PARALLEL), interval(2, None):
+            out_field = 56
+            out_field = MyEnum.C
+
+    domain = (5, 5, 5)
+    out_arr = gt_storage.zeros(backend=backend, shape=domain, dtype=int)
+
+    the_stencil(out_arr, MyEnum.Zero)
+
+    assert out_arr[0, 0, 0] == MyEnum.A.value
+    assert out_arr[0, 0, 1] == MyEnum.B.value
+    assert (out_arr[0, 0, 2:] == MyEnum.C.value).all()
+
+
+@pytest.mark.parametrize("backend", ALL_BACKENDS)
+def test_negated_bool_runtime(backend):
+
+    @gtscript.stencil(backend=backend)
+    def the_stencil(out_field: Field[int], done: bool):  # type: ignore
+        with computation(PARALLEL), interval(...):
+            if not done:
+                out_field = 1
+
+    domain = (5, 5, 5)
+    out_arr = gt_storage.zeros(backend=backend, shape=domain, dtype=int)
+
+    the_stencil(out_arr, done=False)
+
+    assert (out_arr[:] == 1).all()

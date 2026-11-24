@@ -6,9 +6,11 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-from typing import Literal, Union, overload, Any
+from typing import Any, Literal, Optional, Union, overload
 
 import numpy as np
+import pytest
+
 import dace
 import copy
 import uuid
@@ -196,3 +198,100 @@ def compare_sdfg_res(
 ) -> bool:
     """Compares if `res` and  `ref` are the same."""
     return all(np.allclose(ref[name], res[name]) for name in ref.keys())
+
+
+def make_if_block(
+    state: dace.SDFGState,
+    b1_name: str = "__arg1",
+    b2_name: str = "__arg2",
+    cond_name: str = "__cond",
+    output_name: str = "__output",
+    b1_type: dace.typeclass = dace.float64,
+    b2_type: dace.typeclass = dace.float64,
+    output_type: dace.typeclass = dace.float64,
+    b1_shape: Optional[tuple[int, ...]] = None,
+    b2_shape: Optional[tuple[int, ...]] = None,
+    output_shape: Optional[tuple[int, ...]] = None,
+) -> dace_nodes.NestedSDFG:
+    """Create an if block that selects between its arguments `b1_name` and `b2_name`.
+
+    By default, the arguments and the output are scalars. If `b{1,2}_shape` or
+    `output_shape` is given, the corresponding connector is instead connected to an
+    array element `a[__i]` inside a Map with iteration variable `__i`. Because a nested
+    SDFG connector has to be equivalent to the data it is connected to, the connector
+    is then the full array, accessed at `[__i]`.
+    """
+    inner_sdfg = dace.SDFG(unique_name("if_stmt_"))
+
+    types = {b1_name: b1_type, b2_name: b2_type, cond_name: dace.bool_, output_name: output_type}
+    shapes = {b1_name: b1_shape, b2_name: b2_shape, output_name: output_shape}
+    for name in {b1_name, b2_name, cond_name, output_name}:
+        if shapes.get(name) is None:
+            inner_sdfg.add_scalar(name, dtype=types[name], transient=False)
+        else:
+            inner_sdfg.add_array(name, shape=shapes[name], dtype=types[name], transient=False)
+    symbol_mapping = None
+    if any(shape is not None for shape in shapes.values()):
+        inner_sdfg.add_symbol("__i", stype=dace.int32)
+        symbol_mapping = {"__i": "__i"}
+    b1_index = "0" if b1_shape is None else "__i"
+    b2_index = "0" if b2_shape is None else "__i"
+    output_index = "0" if output_shape is None else "__i"
+
+    if_region = dace.sdfg.state.ConditionalBlock(unique_name("if"))
+    inner_sdfg.add_node(if_region, is_start_block=True)
+
+    then_body = dace.sdfg.state.ControlFlowRegion("then_body", sdfg=inner_sdfg)
+    tstate = then_body.add_state("true_branch", is_start_block=True)
+    tstate.add_nedge(
+        tstate.add_access(b1_name),
+        tstate.add_access(output_name),
+        dace.Memlet(f"{b1_name}[{b1_index}] -> [{output_index}]"),
+    )
+
+    else_body = dace.sdfg.state.ControlFlowRegion("else_body", sdfg=inner_sdfg)
+    fstate = else_body.add_state("false_branch", is_start_block=True)
+    fstate.add_nedge(
+        fstate.add_access(b2_name),
+        fstate.add_access(output_name),
+        dace.Memlet(f"{b2_name}[{b2_index}] -> [{output_index}]"),
+    )
+
+    if_region.add_branch(dace.sdfg.state.CodeBlock(cond_name), then_body)
+    if_region.add_branch(dace.sdfg.state.CodeBlock(f"not {cond_name}"), else_body)
+
+    return state.add_nested_sdfg(
+        sdfg=inner_sdfg,
+        inputs={b1_name, b2_name, cond_name},
+        outputs={output_name},
+        symbol_mapping=symbol_mapping,
+    )
+
+
+class DefinedSymbolsCounter:
+    """Counts the calls made to ``dace.SDFGState.defined_symbols()``.
+
+    Resolving the symbols of a state is an expensive operation that scans the whole
+    SDFG, so it should only happen when a copied map scope actually contains a
+    ``NestedSDFG`` and its result should be reused instead of being recomputed.
+    This class patches ``defined_symbols()`` on the class, thus it counts the
+    calls made on the states of every SDFG.
+
+    Args:
+        monkeypatch: The pytest monkey patch fixture used to install and
+            automatically revert the patch.
+
+    Note:
+        The number of observed calls is available through the ``calls``
+        attribute.
+    """
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.calls = 0
+        original = dace.SDFGState.defined_symbols
+
+        def counting(state: dace.SDFGState) -> dict[str, Any]:
+            self.calls += 1
+            return original(state)
+
+        monkeypatch.setattr(dace.SDFGState, "defined_symbols", counting)

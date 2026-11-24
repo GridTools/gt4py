@@ -18,23 +18,20 @@ import dataclasses
 import functools
 import types
 import typing
-import warnings
 from collections.abc import Callable
-from typing import Any, Generic, Optional, Sequence, TypeAlias
+from typing import Any, Generic, Optional, Self, Sequence, TypeAlias, Unpack, override
 
 from gt4py import eve
-from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping
-from gt4py.eve.extended_typing import Self, Unpack, override
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
+from gt4py.eve import xtyping
 from gt4py.next import (
     backend as next_backend,
     common,
     custom_layout_allocators as next_allocators,
-    embedded as next_embedded,
     errors,
     utils,
 )
-from gt4py.next.embedded import operators as embedded_operators
+from gt4py.next.embedded import context as embedded_context, operators as embedded_operators
 from gt4py.next.ffront import (
     field_operator_ast as foast,
     foast_to_gtir,
@@ -47,7 +44,7 @@ from gt4py.next.ffront import (
 from gt4py.next.ffront.gtcallable import GTCallable
 from gt4py.next.instrumentation import hook_machinery, metrics
 from gt4py.next.iterator import ir as itir
-from gt4py.next.otf import arguments, compiled_program, options, toolchain
+from gt4py.next.otf import arguments, compiled_program, options, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
@@ -102,6 +99,18 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     )
     compilation_options: options.CompilationOptions
 
+    @functools.cached_property
+    def _has_compiled_backend(self) -> bool:
+        return self.backend is not None and not isinstance(
+            self.backend, next_backend.EmbeddedBackend
+        )
+
+    @functools.cached_property
+    def _embedded_runner(self) -> Callable[..., None]:
+        """This entry point run by its embedded backend."""
+        assert isinstance(self.backend, next_backend.EmbeddedBackend)
+        return self.backend.runner(typing.cast(GTEntryPoint, self))
+
     @abc.abstractmethod
     def __gt_type__(self) -> ts.CallableType: ...
 
@@ -134,6 +143,10 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     ) -> compiled_program.CompiledProgramsPool:
         if self.backend is None or self.backend == eve.NOTHING:
             raise RuntimeError("Cannot compile a program without backend.")
+        if not self._has_compiled_backend:
+            raise RuntimeError(
+                f"Backend '{self.backend.name}' runs programs embedded; it does not compile them."
+            )
 
         program_type = ffront_type_info.type_in_program_context(self.__gt_type__())
         assert isinstance(program_type, ts_ffront.ProgramType)
@@ -185,20 +198,18 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
                 static_domains=self.compilation_options.static_domains,
             )
 
-        if self.compilation_options.connectivities is None and offset_provider is None:
-            raise ValueError(
-                "Cannot compile a program without connectivities / OffsetProviderType."
-            )
+        # TODO(havogt): explicitly check that the offset provider contains all connectivities
+        #  required by this program, instead of failing in the (possibly asynchronous)
+        #  compilation.
+        if offset_provider is None:
+            offset_provider = self.compilation_options.connectivities or {}
         if not all(isinstance(v, list) for v in static_args.values()):
             raise TypeError(
                 "Please provide the static arguments as lists."
             )  # To avoid confusion with tuple args
 
-        offset_provider = (
-            self.compilation_options.connectivities if offset_provider is None else offset_provider
-        )
         if not isinstance(offset_provider, list):
-            offset_provider = [offset_provider]  # type: ignore[list-item] # cleanup offset_provider vs offset_provider_type
+            offset_provider = [offset_provider]
 
         assert all(
             common.is_offset_provider(op) or common.is_offset_provider_type(op)
@@ -239,8 +250,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
         grid_type: The grid type (cartesian or unstructured) to be used. If not explicitly given
             it will be deduced from actually occurring dimensions.
         connectivities: A dictionary holding static/compile-time information about the offset providers.
-            For now, it is used for ahead of time compilation in DaCe orchestrated programs,
-            i.e. DaCe programs that call GT4Py Programs -SDFGConvertible interface-.
+            Used as the offset provider in `compile` when none is passed explicitly.
     """
 
     @classmethod
@@ -264,9 +274,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self) -> None:
-        no_args_past = toolchain.ConcreteArtifact(
-            self.past_stage, arguments.CompileTimeArgs.empty()
-        )
+        no_args_past = workflow.ConcreteArtifact(self.past_stage, arguments.CompileTimeArgs.empty())
         _ = self._frontend_transforms.past_lint(no_args_past).data
 
     @property
@@ -276,7 +284,10 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     @functools.cached_property
     def __gt_allocator__(
         self,
-    ) -> next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]:
+    ) -> (
+        next_allocators.FieldBufferAllocatorProtocol[core_defs.DeviceTypeT]
+        | core_ndarray_utils.ArrayNamespace
+    ):
         if self.backend:
             return self.backend.__gt_allocator__
         else:
@@ -289,7 +300,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
     @functools.cached_property
     def past_stage(self) -> ffront_stages.PASTProgramDef:
         # backwards compatibility for backends that do not support the full toolchain
-        no_args_def = toolchain.ConcreteArtifact(
+        no_args_def = workflow.ConcreteArtifact(
             self.definition_stage, arguments.CompileTimeArgs.empty()
         )
         return self._frontend_transforms.func_to_past(no_args_def).data
@@ -309,7 +320,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     @functools.cached_property
     def gtir(self) -> itir.Program:
-        no_args_past = toolchain.ConcreteArtifact(
+        no_args_past = workflow.ConcreteArtifact(
             data=ffront_stages.PASTProgramDef(
                 past_node=self.past_stage.past_node,
                 closure_vars=self.past_stage.closure_vars,
@@ -335,44 +346,6 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
             compilation_options=dataclasses.replace(
                 self.compilation_options, static_params=_static_params
             ),
-        )
-
-    def with_bound_args(self, **kwargs: Any) -> ProgramWithBoundArgs:
-        """
-        Bind scalar, i.e. non field, program arguments.
-
-        Example (pseudo-code):
-
-        >>> import gt4py.next as gtx
-        >>> @gtx.program  # doctest: +SKIP
-        ... def program(condition: bool, out: gtx.Field[Dims[IDim], float]):  # noqa: F821 [undefined-name]
-        ...     sample_field_operator(condition, out=out)  # noqa: F821 [undefined-name]
-
-        Create a new program from `program` with the `condition` parameter set to `True`:
-
-        >>> program_with_bound_arg = program.with_bound_args(condition=True)  # doctest: +SKIP
-
-        The resulting program is equivalent to
-
-        >>> @gtx.program  # doctest: +SKIP
-        ... def program(condition: bool, out: gtx.Field[Dims[IDim], float]):  # noqa: F821 [undefined-name]
-        ...     sample_field_operator(condition=True, out=out)  # noqa: F821 [undefined-name]
-
-        and can be executed without passing `condition`.
-
-        >>> program_with_bound_arg(out, offset_provider={})  # doctest: +SKIP
-        """
-        for key in kwargs.keys():
-            if all(key != param.id for param in self.past_stage.past_node.params):
-                raise TypeError(f"Keyword argument '{key}' is not a valid program parameter.")
-
-        return ProgramWithBoundArgs(
-            bound_args=kwargs,
-            **{
-                field.name: getattr(self, field.name)
-                for field in dataclasses.fields(self)
-                if field.init
-            },
         )
 
     def __call__(
@@ -401,102 +374,18 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                     kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
                 )
 
-            if self.backend is not None:
+            if self._has_compiled_backend:
                 self._compiled_programs(
                     *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
                 )
+            elif isinstance(self.backend, next_backend.EmbeddedBackend):
+                with embedded_program_call_context(self, args, offset_provider, kwargs):
+                    self._embedded_runner(*args, offset_provider=offset_provider, **kwargs)
             else:
                 # Embedded execution.
-                warnings.warn(
-                    UserWarning(
-                        f"Field View Program '{self.definition_stage.definition.__name__}': Using Python execution, consider selecting a performance backend."
-                    ),
-                    stacklevel=2,
-                )
-
-                with next_embedded.context.update(offset_provider=offset_provider):
+                with embedded_context.update(offset_provider=offset_provider):
                     with embedded_program_call_context(self, args, offset_provider, kwargs):
                         self.definition_stage.definition(*args, **kwargs)
-
-
-try:
-    from gt4py.next.program_processors.runners.dace.program import (  # type: ignore[assignment]
-        Program,
-    )
-except ImportError:
-    pass
-
-
-@dataclasses.dataclass(frozen=True)
-class ProgramWithBoundArgs(Program):
-    bound_args: dict[str, float | int | bool] = dataclasses.field(default_factory=dict)
-
-    @override
-    def __call__(
-        self, *args: Any, offset_provider: common.OffsetProvider | None = None, **kwargs: Any
-    ) -> None:
-        if offset_provider is None:
-            offset_provider = {}
-        type_ = self.past_stage.past_node.type
-        assert isinstance(type_, ts_ffront.ProgramType)
-        new_type = ts_ffront.ProgramType(
-            definition=ts.FunctionType(
-                kw_only_args={
-                    k: v
-                    for k, v in type_.definition.kw_only_args.items()
-                    if k not in self.bound_args.keys()
-                },
-                pos_only_args=type_.definition.pos_only_args,
-                pos_or_kw_args={
-                    k: v
-                    for k, v in type_.definition.pos_or_kw_args.items()
-                    if k not in self.bound_args.keys()
-                },
-                returns=type_.definition.returns,
-            )
-        )
-
-        arg_types = [type_translation.from_value(arg) for arg in args]
-        kwarg_types = {k: type_translation.from_value(v) for k, v in kwargs.items()}
-
-        try:
-            # This error is also catched using `accepts_args`, but we do it manually here to give
-            # a better error message.
-            for name in self.bound_args.keys():
-                if name in kwargs:
-                    raise ValueError(f"Parameter '{name}' already set as a bound argument.")
-
-            type_info.accepts_args(
-                new_type, with_args=arg_types, with_kwargs=kwarg_types, raise_exception=True
-            )
-        except ValueError as err:
-            bound_arg_names = ", ".join([f"'{bound_arg}'" for bound_arg in self.bound_args.keys()])
-            raise TypeError(
-                f"Invalid argument types in call to program '{self.past_stage.past_node.id}' with "
-                f"bound arguments '{bound_arg_names}'."
-            ) from err
-
-        full_args = [*args]
-        full_kwargs = {**kwargs}
-        for index, param in enumerate(self.past_stage.past_node.params):
-            if param.id in self.bound_args.keys():
-                if index < len(full_args):
-                    full_args.insert(index, self.bound_args[param.id])
-                else:
-                    full_kwargs[str(param.id)] = self.bound_args[param.id]
-
-        return super().__call__(*tuple(full_args), offset_provider=offset_provider, **full_kwargs)
-
-    @override
-    def compile(
-        self,
-        offset_provider: common.OffsetProviderType
-        | common.OffsetProvider
-        | list[common.OffsetProviderType | common.OffsetProvider]
-        | None = None,
-        **static_args: list[xtyping.MaybeNestedInTuple[core_defs.Scalar]],
-    ) -> Self:
-        raise NotImplementedError("Compilation of programs with bound arguments is not implemented")
 
 
 @typing.overload
@@ -609,7 +498,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
     @functools.cached_property
     def foast_stage(self) -> ffront_stages.FOASTOperatorDef:
         return self._frontend_transforms.func_to_foast(
-            toolchain.ConcreteArtifact(
+            workflow.ConcreteArtifact(
                 data=self.definition_stage, args=arguments.CompileTimeArgs.empty()
             )
         ).data
@@ -655,7 +544,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
         return self.foast_stage.closure_vars
 
     def __call__(self, *args: Any, enable_jit: bool | None = None, **kwargs: Any) -> Any:
-        if not next_embedded.context.within_valid_context() and self.backend is not None:
+        if not embedded_context.within_valid_context() and self._has_compiled_backend:
             # non embedded execution
             offset_provider = {**kwargs.pop("offset_provider", {})}
             if "out" not in kwargs:
@@ -677,9 +566,11 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
                 else enable_jit,
             )
         else:
-            if not next_embedded.context.within_valid_context():
+            if not embedded_context.within_valid_context():
                 # field_operator as program
                 kwargs["offset_provider"] = {**kwargs.pop("offset_provider", {})}
+                if isinstance(self.backend, next_backend.EmbeddedBackend):
+                    return self._embedded_runner(*args, **kwargs)
             attributes = (
                 self.definition_stage.attributes
                 if self.definition_stage
@@ -828,7 +719,7 @@ def scan_operator(
     axis: common.Dimension,
     forward: bool = True,
     init: core_defs.Scalar = 0.0,
-    backend: next_backend.Backend | None | eve.NothingType = eve.NOTHING,
+    backend: next_backend.Backend | eve.NothingType | None = eve.NOTHING,
     grid_type: common.GridType | None = None,
 ) -> FieldOperator | Callable[[Callable], FieldOperator]:
     """
@@ -838,7 +729,7 @@ def scan_operator(
         definition: Function from scalars to a scalar.
 
     Keyword Arguments:
-        axis: A :ref:`Dimension` to reduce over.
+        axis: A `Dimension` to reduce over.
         forward: Boolean specifying the direction.
         init: Initial value for the carry argument of the scan pass.
 

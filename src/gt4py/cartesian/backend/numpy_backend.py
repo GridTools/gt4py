@@ -16,7 +16,7 @@ from gt4py.cartesian.gtc import numpy, passes
 from gt4py.cartesian.gtc.gtir_to_oir import GTIRToOIR
 from gt4py.cartesian.gtc.numpy import npir
 from gt4py.cartesian.gtc.passes import oir_optimizations as oir_opt
-from gt4py.eve import codegen
+from gt4py.eve import formatting
 from gt4py.storage import layout
 from gt4py.storage.cartesian import layout_registry
 
@@ -44,7 +44,7 @@ class NumpyBackend(backend.BaseBackend):
         source = numpy.NpirCodegen.apply(self.npir, ignore_np_errstate=ignore_np_errstate)
 
         if self.builder.options.format_source:
-            source = codegen.format_source("python", source)
+            source = formatting.format_python_source(source)
 
         caching = self.builder.caching
         computation_name = f"{caching.module_prefix}computation{caching.module_postfix}.py"

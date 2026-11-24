@@ -90,7 +90,6 @@ no_backend = NoBackend(
         next_tests.definitions.ProgramBackendId.ROUNDTRIP,
         next_tests.definitions.ProgramBackendId.GTIR_EMBEDDED,
         next_tests.definitions.ProgramBackendId.GTFN_CPU,
-        next_tests.definitions.ProgramBackendId.GTFN_CPU_IMPERATIVE,
         pytest.param(
             next_tests.definitions.ProgramBackendId.GTFN_GPU, marks=pytest.mark.requires_gpu
         ),
@@ -103,17 +102,45 @@ no_backend = NoBackend(
             next_tests.definitions.EmbeddedIds.JAX_NUMPY_EXECUTION,
             marks=pytest.mark.requires_jax,
         ),
+        next_tests.definitions.EmbeddedIds.ARRAY_API_STRICT_EXECUTION,
+        pytest.param(
+            next_tests.definitions.EmbeddedIds.TORCH_EXECUTION, marks=pytest.mark.requires_torch
+        ),
+        pytest.param(
+            next_tests.definitions.EmbeddedIds.TORCH_CUDA_EXECUTION,
+            marks=(
+                pytest.mark.requires_torch,
+                pytest.mark.requires_torch_cuda,
+                pytest.mark.requires_gpu,
+            ),
+        ),
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.JAX_JIT,
+            marks=pytest.mark.requires_jax,
+        ),
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.TORCH_COMPILE,
+            marks=pytest.mark.requires_torch,
+        ),
+        pytest.param(
+            next_tests.definitions.OptionalProgramBackendId.TORCH_COMPILE_CUDA,
+            marks=(
+                pytest.mark.requires_torch,
+                pytest.mark.requires_torch_cuda,
+                pytest.mark.requires_gpu,
+            ),
+        ),
         pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU,
-            marks=pytest.mark.requires_dace,
+            marks=pytest.mark.uses_dace,
         ),
         pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_GPU,
-            marks=(pytest.mark.requires_dace, pytest.mark.requires_gpu),
+            marks=(pytest.mark.uses_dace, pytest.mark.requires_gpu),
         ),
         pytest.param(
             next_tests.definitions.OptionalProgramBackendId.DACE_CPU_NO_OPT,
-            marks=pytest.mark.requires_dace,
+            marks=pytest.mark.uses_dace,
         ),
     ],
     ids=lambda p: p.short_id(),
@@ -144,10 +171,10 @@ def debug_itir(tree):
     """Compare tree snippets while debugging."""
     from devtools import debug
 
-    from gt4py.eve.codegen import format_python_source
+    from gt4py.eve import formatting
     from gt4py.next.program_processors import EmbeddedDSL
 
-    debug(format_python_source(EmbeddedDSL.apply(tree)))
+    debug(formatting.format_python_source(EmbeddedDSL.apply(tree)))
 
 
 DimsType = TypeVar("DimsType")
@@ -159,6 +186,9 @@ JDim = gtx.Dimension("JDim")
 JHalfDim = common.flip_staggered(JDim)
 KDim = gtx.Dimension("KDim", kind=gtx.DimensionKind.VERTICAL)
 KHalfDim = common.flip_staggered(KDim)
+
+Ioff = gtx.FieldOffset("Ioff", source=IDim, target=(IDim,))
+Koff = gtx.FieldOffset("Koff", source=KDim, target=(KDim,))
 
 Vertex = gtx.Dimension("Vertex")
 Edge = gtx.Dimension("Edge")

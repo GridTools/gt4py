@@ -292,7 +292,7 @@ def _check_if_map_must_be_handled(
     map_entry: dace_nodes.MapEntry,
     state: dace.SDFGState,
     sdfg: dace.SDFG,
-) -> None | dict[str, tuple[dace_nodes.AccessNode, dace_nodes.AccessNode]]:
+) -> dict[str, tuple[dace_nodes.AccessNode, dace_nodes.AccessNode]] | None:
     """Check if the map should be processed to uphold rule 3.
 
     Essentially the function will check if there is a potential read-write
@@ -415,7 +415,8 @@ def _check_if_map_must_be_handled(
         if not all(
             all_inner_subsets[0] == all_inner_subsets[i] for i in range(1, len(all_inner_subsets))
         ):
-            return None
+            inout_datas.pop(inout_data_name)
+            continue
 
     if len(inout_datas) == 0:
         return None

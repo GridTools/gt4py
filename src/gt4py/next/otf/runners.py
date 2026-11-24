@@ -24,7 +24,7 @@ from typing import Any, Callable, Protocol, runtime_checkable
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import config
-from gt4py.next.otf import stages
+from gt4py.next.otf import artifacts
 from gt4py.next.otf.compilation import cache as _cache, common as compilation_common
 
 
@@ -37,24 +37,23 @@ class CompilationTask:
 
     #: Label used in user-facing messages.
     name: str
-    #: Constructs the program to compile; with ``with_refs`` the connectivity
-    #: buffers are replaced by file references for crossing a process boundary.
-    construct_compilable: Callable[[bool], Any]
+    #: The program to compile; it must be picklable to cross a process boundary.
+    compilable: Any
     #: The artifact-producing step. A runner may execute it anywhere, including
     #: another process; its picklability is the runner's concern.
-    executor: Callable[[Any], stages.CompilationArtifact]
+    executor: Callable[[Any], artifacts.CompilationArtifact]
     #: Reason this task is known not to be shippable to another process, if any.
     no_offload_reason: str | None = None
 
-    def compile(self, with_refs: bool = False) -> stages.CompilationArtifact:
-        return self.executor(self.construct_compilable(with_refs))
+    def compile(self) -> artifacts.CompilationArtifact:
+        return self.executor(self.compilable)
 
 
 @runtime_checkable
 class Runner(Protocol):
     def submit(
         self, task: CompilationTask
-    ) -> concurrent.futures.Future[stages.CompilationArtifact]:
+    ) -> concurrent.futures.Future[artifacts.CompilationArtifact]:
         """Schedule `task`.
 
         Returns:
@@ -69,8 +68,8 @@ class Runner(Protocol):
 
 def _run_in_calling_thread(
     task: CompilationTask,
-) -> concurrent.futures.Future[stages.CompilationArtifact]:
-    future: concurrent.futures.Future[stages.CompilationArtifact] = concurrent.futures.Future()
+) -> concurrent.futures.Future[artifacts.CompilationArtifact]:
+    future: concurrent.futures.Future[artifacts.CompilationArtifact] = concurrent.futures.Future()
     try:
         future.set_result(task.compile())
     except BaseException as exception:  # re-raised via the future
@@ -83,7 +82,7 @@ class SerialRunner:
 
     def submit(
         self, task: CompilationTask
-    ) -> concurrent.futures.Future[stages.CompilationArtifact]:
+    ) -> concurrent.futures.Future[artifacts.CompilationArtifact]:
         return _run_in_calling_thread(task)
 
     def shutdown(self, wait: bool = True) -> None:
@@ -98,7 +97,7 @@ class ThreadRunner:
 
     def submit(
         self, task: CompilationTask
-    ) -> concurrent.futures.Future[stages.CompilationArtifact]:
+    ) -> concurrent.futures.Future[artifacts.CompilationArtifact]:
         return self._pool.submit(task.compile)
 
     def shutdown(self, wait: bool = True) -> None:
@@ -166,17 +165,21 @@ def _apply_config_overrides(overrides: dict[str, Any]) -> None:
 # Top-level (must be top-level for pickle).
 def _run_compilation_task_in_worker(
     executor_blob: bytes,
-    compilable: Any,
+    compilable_blob: bytes,
     config_overrides: dict[str, Any],
     recursion_limit: int,
-) -> stages.CompilationArtifact:
-    """Worker entry point: deserialize the executor and run it."""
+) -> artifacts.CompilationArtifact:
+    """Worker entry point: deserialize the executor and the compilable and run it."""
     # `sys.setrecursionlimit` is per-process: a limit the parent raised for
     # deeply nested IR would silently reset to the interpreter default in a
     # `spawn` worker. Adopt the parent's limit, but never lower the worker's.
     sys.setrecursionlimit(max(recursion_limit, sys.getrecursionlimit()))
     _apply_config_overrides(config_overrides)
     executor = pickle.loads(executor_blob)
+    # Unpickled here rather than by the pool, so that a failure (e.g. an
+    # unreadable connectivity table file) fails this task instead of breaking
+    # the pool for all later tasks.
+    compilable = pickle.loads(compilable_blob)
     return executor(compilable)
 
 
@@ -210,7 +213,7 @@ class ProcessRunner:
 
     def submit(
         self, task: CompilationTask
-    ) -> concurrent.futures.Future[stages.CompilationArtifact]:
+    ) -> concurrent.futures.Future[artifacts.CompilationArtifact]:
         reason = task.no_offload_reason
         executor_blob: bytes | None = None
         if reason is None:
@@ -226,10 +229,23 @@ class ProcessRunner:
             )
             return _run_in_calling_thread(task)
 
+        try:
+            compilable_blob = pickle.dumps(task.compilable)
+        except Exception as error:  # pickling arbitrary object graphs raises arbitrary errors
+            future: concurrent.futures.Future[artifacts.CompilationArtifact] = (
+                concurrent.futures.Future()
+            )
+            future.set_exception(error)
+            return future
+
+        # TODO(egparedes): a script calling a program at module level without an
+        #   `if __name__ == "__main__":` guard breaks the pool with an unhelpful
+        #   `BrokenProcessPool` (the spawned workers re-import `__main__`).
+        #   See https://github.com/GridTools/gt4py/issues/3036.
         return self._pool.submit(
             _run_compilation_task_in_worker,
             executor_blob=executor_blob,
-            compilable=task.construct_compilable(True),
+            compilable_blob=compilable_blob,
             config_overrides=_config_snapshot(),
             recursion_limit=sys.getrecursionlimit(),
         )
@@ -292,7 +308,7 @@ def reset_default_runner() -> None:
 # Shut down worker pools while the interpreter is still intact; relying on
 # garbage collection at teardown leaks the pool's semaphores (with a
 # ``resource_tracker`` warning on stderr). Ordering: the temporary directories
-# workers read from (session cache, connectivity dumps) are removed by
+# workers read from (the session cache, including the connectivity tables) are removed by
 # ``weakref.finalize``, whose exit hook is registered no later than the import
 # of `otf.compilation.cache` above — atexit runs LIFO, so this shutdown runs
 # before those directories disappear.

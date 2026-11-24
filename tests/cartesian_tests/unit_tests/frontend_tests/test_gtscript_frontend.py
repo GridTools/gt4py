@@ -6,6 +6,8 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import ast
+from enum import IntEnum, StrEnum, Enum
 import inspect
 import functools
 import textwrap
@@ -45,8 +47,16 @@ from gt4py.cartesian.gtscript import (
     int64,
 )
 
-
 # ---- Utilities -----
+
+user_dtypes = {
+    "Int": np.int32,
+    "Int32": np.int32,
+    "Int64": np.int64,
+    "Float": np.float32,
+    "Float32": np.float32,
+    "Float64": np.float64,
+}
 
 
 def parse_definition(
@@ -55,7 +65,7 @@ def parse_definition(
     name: str,
     module: str,
     externals: Optional[Dict[str, Any]] = None,
-    dtypes: Dict[Type, Type] = None,
+    dtypes: Optional[Dict[str, Type]] = None,
     literal_int_precision: int | None = None,
     literal_float_precision: int | None = None,
     rebuild=False,
@@ -252,7 +262,7 @@ class TestInlinedExternals:
             "other_call",
             "func",
             "another_const",
-            "test_gtscript_frontend.func_nested.func_deeply_nested",
+            "cartesian_tests.unit_tests.frontend_tests.test_gtscript_frontend.func_nested.func_deeply_nested",
         }
 
     def test_decorated_freeze(self):
@@ -1924,10 +1934,6 @@ class TestGlobalTablesWithDataDimensions:
                 module=self.__class__.__name__,
             )
 
-    @pytest.mark.xfail(
-        reason="IR validation expects ddim sizes to be of type `int`",
-        raises=gt_frontend.GTScriptSyntaxError,
-    )
     def test_ddims_with_numpy_type(self) -> None:
         def data_dims_with_numpy_int_type(
             out_field: gtscript.Field[gtscript.IJK, np.int32],
@@ -2279,24 +2285,40 @@ class TestTemporaryTypes:
         def temporary_int_stencil(field: gtscript.Field[float]):  # type: ignore
             with computation(PARALLEL), interval(0, 1):
                 temporary: int = 12
-                field[0, 0, 0] = temporary
+                temporary_as_upper_case: Int = 12
+                field[0, 0, 0] = temporary + temporary_as_upper_case
 
         def temporary_float_stencil(field: gtscript.Field[float]):  # type: ignore
             with computation(PARALLEL), interval(0, 1):
                 temporary: float = 12
-                field[0, 0, 0] = temporary
+                temporary_as_upper_case: Float = 12
+                field[0, 0, 0] = temporary + temporary_as_upper_case
 
         def temporary_float32_64_stencil(field: gtscript.Field[float]):  # type: ignore
             with computation(PARALLEL), interval(0, 1):
                 temporary32: float32 = 12.12
+                temporary32_as_upper_case: Float32 = 12.12
                 temporary64: float64 = 34.34
-                field[0, 0, 0] = temporary32 + temporary64
+                temporary64_as_upper_case: Float64 = 34.34
+                field[0, 0, 0] = (
+                    temporary32
+                    + temporary64
+                    + temporary32_as_upper_case
+                    + temporary64_as_upper_case
+                )
 
         def temporary_int32_64_stencil(field: gtscript.Field[float]):  # type: ignore
             with computation(PARALLEL), interval(0, 1):
                 temporary32: int32 = 12
+                temporary_as_upper_case_32: Int32 = 12
                 temporary64: int64 = 34
-                field[0, 0, 0] = temporary32 + temporary64
+                temporary_as_upper_case_64: Int64 = 34
+                field[0, 0, 0] = (
+                    temporary32
+                    + temporary_as_upper_case_32
+                    + temporary64
+                    + temporary_as_upper_case_64
+                )
 
         self.int_stencil = temporary_int_stencil
         self.float_stencil = temporary_float_stencil
@@ -2309,6 +2331,7 @@ class TestTemporaryTypes:
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
             literal_int_precision=64,
+            dtypes=user_dtypes,
         )
 
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
@@ -2320,6 +2343,7 @@ class TestTemporaryTypes:
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
             literal_int_precision=32,
+            dtypes=user_dtypes,
         )
 
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
@@ -2331,6 +2355,7 @@ class TestTemporaryTypes:
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
             literal_float_precision=64,
+            dtypes=user_dtypes,
         )
 
         field_declaration: nodes.FieldDecl = def_ir.computations[0].body.stmts[0]
@@ -2342,6 +2367,7 @@ class TestTemporaryTypes:
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
             literal_float_precision=32,
+            dtypes=user_dtypes,
         )
 
     def test_explicit_float_precision_temp_defn(self):
@@ -2349,6 +2375,7 @@ class TestTemporaryTypes:
             self.float_explicit_stencil,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
+            dtypes=user_dtypes,
         )
 
         field_decls = [
@@ -2358,13 +2385,16 @@ class TestTemporaryTypes:
         ]
 
         assert field_decls[0].data_type == nodes.DataType.FLOAT32
-        assert field_decls[1].data_type == nodes.DataType.FLOAT64
+        assert field_decls[1].data_type == nodes.DataType.FLOAT32
+        assert field_decls[2].data_type == nodes.DataType.FLOAT64
+        assert field_decls[3].data_type == nodes.DataType.FLOAT64
 
     def test_explicit_int_precision_temp_defn(self):
         def_ir = parse_definition(
             self.int_explicit_stencil,
             name=inspect.stack()[0][3],
             module=self.__class__.__name__,
+            dtypes=user_dtypes,
         )
 
         field_decls = [
@@ -2374,7 +2404,9 @@ class TestTemporaryTypes:
         ]
 
         assert field_decls[0].data_type == nodes.DataType.INT32
-        assert field_decls[1].data_type == nodes.DataType.INT64
+        assert field_decls[1].data_type == nodes.DataType.INT32
+        assert field_decls[2].data_type == nodes.DataType.INT64
+        assert field_decls[3].data_type == nodes.DataType.INT64
 
 
 class TestNumpyTypedConstants:
@@ -2480,3 +2512,93 @@ class TestIteratorAccess:
                 name=inspect.stack()[0][3],
                 module=self.__class__.__name__,
             )
+
+
+class TestEllipsisNodeDetection:
+    # 'ast.Ellipsis' is removed in Python 3.14 and 'types.EllipsisType' is the type of
+    # the '...' object rather than of its AST node, so this must not go back to being
+    # an 'isinstance()' check against either of them.
+    @pytest.mark.parametrize(
+        "source, expected", [("...", True), ("1", False), ("None", False), ("x", False)]
+    )
+    def test_is_ellipsis_node(self, source, expected):
+        node = ast.parse(source, mode="eval").body
+        assert gt_frontend._is_ellipsis_node(node) is expected
+
+    def test_ellipsis_interval_parses(self):
+        def stencil(field_a: gtscript.Field[np.float64], field_b: gtscript.Field[np.float64]):
+            with computation(PARALLEL), interval(...):  # noqa: F821 [undefined-name]
+                field_b = field_a
+
+        parse_definition(stencil, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+    def test_ellipsis_index_does_not_parses(self):
+        def stencil(field_a: gtscript.Field[np.float64], field_b: gtscript.Field[np.float64]):
+            with computation(PARALLEL), interval(...):  # noqa: F821 [undefined-name]
+                field_b[...] = field_a
+
+        with pytest.raises(GTScriptSyntaxError):
+            parse_definition(stencil, name=inspect.stack()[0][3], module=self.__class__.__name__)
+
+
+@gtscript.enum
+class LocalEnum(IntEnum):
+    A = 42
+    B = 1000
+
+
+class TestEnum:
+    def setup_method(self):
+        def enum(field: gtscript.Field[float], order: LocalEnum):  # type: ignore
+            with computation(PARALLEL), interval(0, 1):
+                if order > LocalEnum.A:
+                    field[0, 0, 0] = LocalEnum.B
+
+        self.stencil = enum
+
+    @pytest.mark.parametrize("integer_precision", [32, 64])
+    def test_enum_in_stencil(self, integer_precision):
+        def_ir = parse_definition(
+            self.stencil,
+            name=inspect.stack()[0][3],
+            module=self.__class__.__name__,
+            literal_int_precision=integer_precision,
+        )
+
+        assert isinstance(def_ir.computations[0].body.stmts[0].condition.rhs, nodes.ScalarLiteral)
+        assert def_ir.computations[0].body.stmts[0].condition.rhs.value == LocalEnum.A
+        assert isinstance(
+            def_ir.computations[0].body.stmts[0].main_body.stmts[0].value, nodes.ScalarLiteral
+        )
+        assert def_ir.computations[0].body.stmts[0].main_body.stmts[0].value.value == LocalEnum.B
+
+    def test_enum_bad_definitions(self):
+
+        @gtscript.enum
+        class MyTestEnum(IntEnum):
+            A = 0
+
+        with pytest.raises(
+            ValueError,
+            match="Enum names must be unique. @gtscript.enum MyTestEnum is already taken*",
+        ):
+
+            @gtscript.enum
+            class MyTestEnum(IntEnum):
+                B = 0
+
+        with pytest.raises(
+            ValueError, match="Enum BadEnumTestEnum needs to derive from `enum.IntEnum`*"
+        ):
+
+            @gtscript.enum  # type: ignore
+            class BadEnumTestEnum(Enum):
+                B = 0.0
+
+        with pytest.raises(
+            ValueError, match="Enum BadStrTestEnum needs to derive from `enum.IntEnum`*"
+        ):
+
+            @gtscript.enum  # type: ignore
+            class BadStrTestEnum(StrEnum):
+                C = "meh"

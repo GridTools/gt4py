@@ -97,8 +97,7 @@ def _is_collectable_expr(node: itir.Node) -> bool:
         #  visited, to ensure symbol dependencies are recognized correctly.
         # do also not collect reduce, map_list and neighbors nodes if they are left in the IR at this point, this may lead to
         #  conceptual problems (other parts of the tool chain rely on the arguments being present directly
-        #  on the reduce FunCall node (connectivity deduction)), as well as problems with the imperative backend
-        #  backend (single pass eager depth first visit approach), see also https://github.com/GridTools/gt4py/issues/1795
+        #  on the reduce FunCall node (connectivity deduction)), see also https://github.com/GridTools/gt4py/issues/1795
         # do also not collect lifts or applied lifts as they become invisible to the lift inliner
         #  otherwise
         # do also not collect index nodes because otherwise the right hand side of SetAts becomes a let statement
@@ -414,8 +413,8 @@ def extract_subexpression(
             continue
 
         expr_id = next(prefixed_uids)
-        extracted[itir.Sym(id=expr_id)] = expr
-        expr_ref = itir.SymRef(id=expr_id)
+        extracted[im.sym(expr_id, expr.type)] = expr
+        expr_ref = im.ref(expr_id, expr.type)
         for id_ in eligible_ids:
             expr_map[id_] = expr_ref
 

@@ -8,10 +8,9 @@
 
 from __future__ import annotations
 
+import dace
 import pytest
 import numpy as np
-
-dace = pytest.importorskip("dace")
 
 from gt4py.next.program_processors.runners.dace import (
     transformations as gtx_transformations,
@@ -129,7 +128,7 @@ def test_distributed_buffer_global_memory_data_race():
     assert sdfg.number_of_nodes() == 2
 
     res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
-    assert "DistributedBufferRelocator" not in res[sdfg]
+    assert res is None
     assert state2.number_of_nodes() == 2
 
 
@@ -183,7 +182,7 @@ def test_distributed_buffer_global_memory_data_race2():
     assert state2.number_of_nodes() == 2
 
     res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
-    assert "DistributedBufferRelocator" not in res[sdfg]
+    assert res is None
     assert state1.number_of_nodes() == 10
     assert state2.number_of_nodes() == 2
 
@@ -387,3 +386,135 @@ def test_distributed_buffer_conditional_block():
 
     res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
     assert res[sdfg]["DistributedBufferRelocator"][wb_state] == {"t"}
+
+
+def _make_distributed_buffer_definition_in_loop_sdfg() -> tuple[
+    dace.SDFG, dace.SDFGState, dace.SDFGState
+]:
+    """Creates an SDFG where the temporary is written inside a loop body.
+
+    The SDFG models what is generated for `scan` field operators: in iteration
+    `k` the loop writes element `k` of the temporary `t` and afterwards, in a
+    regular state, the fully written `t` is copied into the output `b`.
+    """
+    sdfg = dace.SDFG(util.unique_name("distributed_buffer_definition_in_loop_sdfg"))
+
+    for name in ["a", "b", "t"]:
+        sdfg.add_array(name=name, shape=(10,), dtype=dace.float64, transient=False)
+    sdfg.arrays["t"].transient = True
+    sdfg.add_symbol("k", dace.int32)
+
+    entry_state = sdfg.add_state(is_start_block=True)
+    loop_region = dace.sdfg.state.LoopRegion("loop", "k < 10", "k", "k = k + 1")
+    sdfg.add_node(loop_region)
+    sdfg.add_edge(entry_state, loop_region, dace.InterstateEdge(assignments={"k": 0}))
+
+    body_state = loop_region.add_state("loop_body", is_start_block=True)
+    scan_step = body_state.add_tasklet(
+        name="scan_step",
+        inputs={"__in"},
+        code="__out = __in + 1.0",
+        outputs={"__out"},
+    )
+    body_state.add_edge(body_state.add_access("a"), None, scan_step, "__in", dace.Memlet("a[k]"))
+    body_state.add_edge(scan_step, "__out", body_state.add_access("t"), None, dace.Memlet("t[k]"))
+
+    wb_state = sdfg.add_state_after(loop_region)
+    wb_state.add_nedge(wb_state.add_access("t"), wb_state.add_access("b"), dace.Memlet("t[0:10]"))
+
+    sdfg.validate()
+    return sdfg, body_state, wb_state
+
+
+def test_distributed_buffer_definition_in_loop():
+    """Tests that the write back is never moved into the body of a loop.
+
+    Relocating the write back into the loop would execute it in every iteration,
+    thus on data that the loop has only written partially, which is not only
+    useless, but also creates a data race.
+    """
+    sdfg, body_state, wb_state = _make_distributed_buffer_definition_in_loop_sdfg()
+    assert wb_state.number_of_nodes() == 2
+    assert not any(dnode.data == "b" for dnode in body_state.data_nodes())
+
+    res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+
+    # The write back has to stay in the state after the loop; in particular no
+    #  write to `b` may be added inside the loop.
+    assert res is None or "DistributedBufferRelocator" not in res[sdfg]
+    assert wb_state.number_of_nodes() == 2
+    assert not any(dnode.data == "b" for dnode in body_state.data_nodes())
+    sdfg.validate()
+
+
+def test_distributed_buffer_remover_in_nested_sdfg():
+    """The relocation must also be performed inside nested SDFGs."""
+    inner_sdfg, inner_state1, inner_state3 = _mk_distributed_buffer_sdfg()
+
+    sdfg = dace.SDFG(util.unique_name("distributed_buffer_outer_sdfg"))
+    for name in ["a", "b"]:
+        sdfg.add_datadesc(name, inner_sdfg.arrays[name].clone())
+    state = sdfg.add_state(is_start_block=True)
+    nsdfg = state.add_nested_sdfg(inner_sdfg, inputs={"a"}, outputs={"a", "b"})
+    state.add_edge(state.add_access("a"), None, nsdfg, "a", dace.Memlet("a[0:10, 0:10]"))
+    state.add_edge(nsdfg, "a", state.add_access("a"), None, dace.Memlet("a[0:10, 0:10]"))
+    state.add_edge(nsdfg, "b", state.add_access("b"), None, dace.Memlet("b[0:100, 0:100]"))
+    sdfg.validate()
+
+    res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+    assert res is not None
+    assert sdfg not in res
+    assert res[inner_sdfg]["DistributedBufferRelocator"][inner_state3] == {"tmp"}
+    assert any(dnode.data == "b" for dnode in inner_state1.data_nodes())
+
+    # Nothing is left to relocate.
+    assert gtx_transformations.gt_reduce_distributed_buffering(sdfg) is None
+
+
+def test_distributed_buffer_remover_in_root_and_nested_sdfg():
+    """The relocation must be performed both in the root and in the nested SDFG."""
+    inner_sdfg, inner_state1, inner_state3 = _mk_distributed_buffer_sdfg()
+
+    sdfg = dace.SDFG(util.unique_name("distributed_buffer_outer_sdfg"))
+    for name in ["a", "b"]:
+        sdfg.add_datadesc(name, inner_sdfg.arrays[name].clone())
+    for name in ["c", "d", "otmp"]:
+        sdfg.add_array(name, shape=(10, 10), dtype=dace.float64, transient=False)
+    sdfg.arrays["otmp"].transient = True
+
+    # Computation of the outer write back buffer.
+    state1 = sdfg.add_state(is_start_block=True)
+    state1.add_mapped_tasklet(
+        "outer_computation",
+        map_ranges={"__i1": "0:10", "__i2": "0:10"},
+        inputs={"__in": dace.Memlet("c[__i1, __i2]")},
+        code="__out = __in + 1.0",
+        outputs={"__out": dace.Memlet("otmp[__i1, __i2]")},
+        external_edges=True,
+    )
+
+    # The nested SDFG, that contains a relocatable buffer itself.
+    state2 = sdfg.add_state_after(state1)
+    nsdfg = state2.add_nested_sdfg(inner_sdfg, inputs={"a"}, outputs={"a", "b"})
+    state2.add_edge(state2.add_access("a"), None, nsdfg, "a", dace.Memlet("a[0:10, 0:10]"))
+    state2.add_edge(nsdfg, "a", state2.add_access("a"), None, dace.Memlet("a[0:10, 0:10]"))
+    state2.add_edge(nsdfg, "b", state2.add_access("b"), None, dace.Memlet("b[0:100, 0:100]"))
+
+    # Write back of the outer buffer.
+    state3 = sdfg.add_state_after(state2)
+    state3.add_nedge(
+        state3.add_access("otmp"), state3.add_access("d"), dace.Memlet("otmp[0:10, 0:10]")
+    )
+    sdfg.validate()
+
+    res = gtx_transformations.gt_reduce_distributed_buffering(sdfg)
+    assert res is not None
+    assert set(res.keys()) == {sdfg, inner_sdfg}
+    assert res[sdfg]["DistributedBufferRelocator"][state3] == {"otmp"}
+    assert res[inner_sdfg]["DistributedBufferRelocator"][inner_state3] == {"tmp"}
+    assert any(dnode.data == "d" for dnode in state1.data_nodes())
+    assert any(dnode.data == "b" for dnode in inner_state1.data_nodes())
+    sdfg.validate()
+
+    # Nothing is left to relocate.
+    assert gtx_transformations.gt_reduce_distributed_buffering(sdfg) is None

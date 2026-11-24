@@ -30,6 +30,25 @@ def test_inline_dynamic_shift_as_fieldop_arg(uids):
     assert actual == expected
 
 
+def test_inline_dynamic_shift_nested_as_fieldop_args(uids):
+    testee = im.as_fieldop(im.lambda_("a", "b")(im.deref(im.shift(IOff, im.deref("b"))("a"))))(
+        im.as_fieldop(im.lambda_("a")(im.deref(im.shift(IOff, 1)("a"))))(
+            im.as_fieldop("deref")("inp")
+        ),
+        "offset_field",
+    )
+    expected = im.as_fieldop(
+        im.lambda_("inp", "offset_field")(
+            im.deref(im.shift(IOff, 1)(im.shift(IOff, im.deref("offset_field"))("inp")))
+        )
+    )("inp", "offset_field")
+
+    actual = inline_dynamic_shifts.InlineDynamicShifts.apply(
+        testee, offset_provider_type={}, uids=uids
+    )
+    assert actual == expected
+
+
 def test_inline_dynamic_shift_let_var(uids):
     testee = im.let("tmp", im.as_fieldop("deref")("inp"))(
         im.as_fieldop(im.lambda_("a", "b")(im.deref(im.shift(IOff, im.deref("b"))("a"))))(

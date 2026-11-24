@@ -46,7 +46,7 @@ def test_program_gtir_regression(cartesian_case):
 )
 @pytest.mark.uses_program_metrics
 def test_collect_metrics(cartesian_case, metrics_level, expected_names):
-    if cartesian_case.backend is None:
+    if cases.runs_embedded(cartesian_case):
         pytest.skip("Precompiled program with embedded execution is not possible.")
 
     @gtx.field_operator

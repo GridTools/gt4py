@@ -209,7 +209,7 @@ def test_aligned_index():
     [([0, 1, 2], None), ([0, 1, common._DEFAULT_SKIP_VALUE], common._DEFAULT_SKIP_VALUE)],
 )
 def test_as_connectivity(nd_array_implementation, data, skip_value):
-    testee = gtx.as_connectivity([I], J, nd_array_implementation.array(data))
+    testee = gtx.as_connectivity([I], J, nd_array_implementation.asarray(data))
     assert testee.skip_value is skip_value
 
 
@@ -312,3 +312,41 @@ class TestFieldConstructorInit:
         """allocator=invalid object → raises ValueError."""
         with pytest.raises(ValueError, match="Invalid field allocator"):
             constructors.FieldConstructor(allocator="not_an_allocator")
+
+
+@pytest.mark.requires_torch
+@pytest.mark.parametrize(
+    "device, expected_device_type",
+    [
+        (None, "cpu"),
+        (core_defs.Device(core_defs.DeviceType.CPU, 0), "cpu"),
+        pytest.param(
+            core_defs.Device(core_defs.DeviceType.CUDA, 0),
+            "cuda",
+            marks=(pytest.mark.requires_gpu, pytest.mark.requires_torch_cuda),
+        ),
+    ],
+)
+def test_as_field_torch_allocator(device, expected_device_type):
+    import torch
+
+    field = gtx.as_field([I], np.arange(3.0), allocator=torch, device=device)
+
+    assert isinstance(field.ndarray, torch.Tensor)
+    assert field.ndarray.device.type == expected_device_type
+    assert field.dtype == core_defs.dtype(np.float64)
+    np.testing.assert_array_equal(field.asnumpy(), np.arange(3.0))
+
+
+@pytest.mark.requires_torch
+@pytest.mark.requires_torch_cuda
+@pytest.mark.requires_gpu
+def test_torch_allocator_follows_default_device():
+    import torch
+
+    with torch.device("cuda"):
+        field = gtx.as_field([I], np.arange(3.0), allocator=torch)
+        zeros = gtx.zeros({I: 3}, allocator=torch)
+
+    assert field.ndarray.device.type == "cuda"
+    assert zeros.ndarray.device.type == "cuda"

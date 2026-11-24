@@ -11,11 +11,16 @@
 import dataclasses
 import enum
 import importlib
-from typing import Final
+import types
+from types import ModuleType
+from typing import Final, Optional
+
+import array_api_strict
+import numpy as np
 import pytest
 
-from gt4py.next.embedded import nd_array_field
-from gt4py.next import constructors
+from gt4py._core import definitions as core_defs
+from gt4py.next import common, constructors
 
 # Skip definitions
 XFAIL = pytest.xfail
@@ -41,7 +46,6 @@ class _PythonObjectIdMixin:
 
 class ProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     GTFN_CPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn"
-    GTFN_CPU_IMPERATIVE = "gt4py.next.program_processors.runners.gtfn.run_gtfn_imperative"
     GTFN_CPU_NO_TRANSFORMS = "gt4py.next.program_processors.runners.gtfn.run_gtfn_no_transforms"
     GTFN_GPU = "gt4py.next.program_processors.runners.gtfn.run_gtfn_gpu"
     ROUNDTRIP = "gt4py.next.program_processors.runners.roundtrip.default"
@@ -58,21 +62,74 @@ class EmbeddedDummyBackend:
     executor: Final = None
 
 
-numpy_execution = EmbeddedDummyBackend("EmbeddedNumPy", nd_array_field.np)
-cupy_execution = EmbeddedDummyBackend("EmbeddedCuPy", nd_array_field.cp)
-jax_numpy_execution = EmbeddedDummyBackend("EmbeddedJaxNumPy", nd_array_field.jnp)
+def _optional_module(name: str) -> Optional[ModuleType]:
+    try:
+        return importlib.import_module(name)
+    except ImportError:
+        return None
+
+
+numpy_execution = EmbeddedDummyBackend("EmbeddedNumPy", np)
+cupy_execution = EmbeddedDummyBackend("EmbeddedCuPy", _optional_module("cupy"))
+jax_numpy_execution = EmbeddedDummyBackend("EmbeddedJaxNumPy", _optional_module("jax.numpy"))
+array_api_strict_execution = EmbeddedDummyBackend("EmbeddedArrayAPIStrict", array_api_strict)
+torch_execution = EmbeddedDummyBackend("EmbeddedTorch", _optional_module("torch"))
+
+
+class _TorchCUDAAllocator:
+    """Allocates torch tensors on a CUDA device given explicitly, not through the torch default device."""
+
+    __gt_device_type__ = core_defs.DeviceType.CUDA
+
+    def __gt_allocate__(
+        self,
+        domain: common.Domain,
+        dtype: core_defs.DType,
+        device_id: int = 0,
+        aligned_index: object = None,
+    ) -> types.SimpleNamespace:
+        import torch
+
+        return types.SimpleNamespace(
+            ndarray=torch.empty(
+                domain.shape,
+                dtype=getattr(torch, np.dtype(dtype.scalar_type).name),
+                device=torch.device("cuda", device_id),
+            )
+        )
+
+
+torch_cuda_execution = EmbeddedDummyBackend("EmbeddedTorchCUDA", _TorchCUDAAllocator())
+
+
+_torch_compile = _optional_module(
+    "gt4py.next.program_processors.runners.experimental.torch_compile"
+)
+torch_compile_cuda = (
+    dataclasses.replace(
+        _torch_compile.torch_compile, name="torch_compile_cuda", allocator=_TorchCUDAAllocator()
+    )
+    if _torch_compile is not None
+    else None
+)
 
 
 class EmbeddedIds(_PythonObjectIdMixin, str, enum.Enum):
     NUMPY_EXECUTION = "next_tests.definitions.numpy_execution"
     CUPY_EXECUTION = "next_tests.definitions.cupy_execution"
     JAX_NUMPY_EXECUTION = "next_tests.definitions.jax_numpy_execution"
+    ARRAY_API_STRICT_EXECUTION = "next_tests.definitions.array_api_strict_execution"
+    TORCH_EXECUTION = "next_tests.definitions.torch_execution"
+    TORCH_CUDA_EXECUTION = "next_tests.definitions.torch_cuda_execution"
 
 
 class OptionalProgramBackendId(_PythonObjectIdMixin, str, enum.Enum):
     DACE_CPU = "gt4py.next.program_processors.runners.dace.run_dace_cpu"
     DACE_GPU = "gt4py.next.program_processors.runners.dace.run_dace_gpu"
     DACE_CPU_NO_OPT = "gt4py.next.program_processors.runners.dace.run_dace_cpu_noopt"
+    JAX_JIT = "gt4py.next.program_processors.runners.experimental.jax_jit.jax_jit"
+    TORCH_COMPILE = "gt4py.next.program_processors.runners.experimental.torch_compile.torch_compile"
+    TORCH_COMPILE_CUDA = "next_tests.definitions.torch_compile_cuda"
 
 
 class ProgramFormatterId(_PythonObjectIdMixin, str, enum.Enum):
@@ -99,6 +156,10 @@ USES_IR_IF_STMTS = "uses_ir_if_stmts"
 USES_INDEX_FIELDS = "uses_index_fields"
 USES_LIFT = "uses_lift"
 USES_NEGATIVE_MODULO = "uses_negative_modulo"
+USES_OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM = "uses_offset_tag_differing_from_local_dim"
+USES_OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_IN_REDUCTION = (
+    "uses_offset_tag_differing_from_local_dim_in_reduction"
+)
 USES_ORIGIN = "uses_origin"
 USES_REDUCE_WITH_LAMBDA = "uses_reduce_with_lambda"
 USES_SCAN = "uses_scan"
@@ -106,7 +167,6 @@ USES_SCAN_IN_FIELD_OPERATOR = "uses_scan_in_field_operator"
 USES_SCAN_IN_STENCIL = "uses_scan_in_stencil"
 USES_SCAN_WITHOUT_FIELD_ARGS = "uses_scan_without_field_args"
 USES_SCAN_NESTED = "uses_scan_nested"
-USES_SCAN_REQUIRING_PROJECTOR = "uses_scan_requiring_projector"
 USES_SPARSE_FIELDS = "uses_sparse_fields"
 USES_SPARSE_FIELDS_AS_OUTPUT = "uses_sparse_fields_as_output"
 USES_REDUCTION_WITH_ONLY_SPARSE_FIELDS = "uses_reduction_with_only_sparse_fields"
@@ -121,6 +181,7 @@ USES_ZERO_DIMENSIONAL_FIELDS = "uses_zero_dimensional_fields"
 USES_CARTESIAN_SHIFT = "uses_cartesian_shift"
 USES_UNSTRUCTURED_SHIFT = "uses_unstructured_shift"
 USES_MAX_OVER = "uses_max_over"
+USES_MATH_OUTSIDE_ARRAY_API = "uses_math_outside_array_api"
 USES_MESH_WITH_SKIP_VALUES = "uses_mesh_with_skip_values"
 USES_PROGRAM_METRICS = "uses_program_metrics"
 USES_SCALAR_IN_DOMAIN_AND_FO = "uses_scalar_in_domain_and_fo"
@@ -128,6 +189,9 @@ USES_CONCAT_WHERE = "uses_concat_where"
 EMBEDDED_CONCAT_WHERE_INFINITE_DOMAIN = "embedded_concat_where_infinite_domain"
 EMBEDDED_CONCAT_WHERE_NON_CONTIGUOUS_DOMAIN = "embedded_concat_where_non_contiguous_domain"
 USES_PROGRAM_WITH_SLICED_OUT_ARGUMENTS = "uses_program_with_sliced_out_arguments"
+USES_SCALAR_IN_CONTROL_FLOW = "uses_scalar_in_control_flow"
+USES_SCALAR_IN_DOMAIN = "uses_scalar_in_domain"
+USES_SCAN_CARRY_IN_CONTROL_FLOW = "uses_scan_carry_in_control_flow"
 CHECKS_SPECIFIC_ERROR = "checks_specific_error"
 
 # Skip messages (available format keys: 'marker', 'backend')
@@ -135,6 +199,14 @@ UNSUPPORTED_MESSAGE = "'{marker}' tests not supported by '{backend}' backend"
 BINDINGS_UNSUPPORTED_MESSAGE = "'{marker}' not supported by '{backend}' bindings"
 REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE = (
     "We cannot unroll a reduction on a sparse field only (not clear if it is legal ITIR)"
+)
+#: An offset and its local dimension must currently share a name on most backends, because
+#: the connectivity is looked up in the offset provider by the *local dimension's* name.
+#: Lifted for the gtfn shift path by #1789; see
+#: `regression_tests/ffront_tests/test_offset_dimensions_names.py`.
+OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_MESSAGE = (
+    "'{marker}': '{backend}' looks the connectivity up by the local dimension's name,"
+    " so it must equal the offset tag"
 )
 # Index-only vs. consequential markers:
 # A `uses_*` marker only affects execution if it appears in one of the skip lists below (and thus
@@ -144,6 +216,9 @@ REDUCTION_WITH_ONLY_SPARSE_FIELDS_MESSAGE = (
 # safe to add. Because `xfail_strict` is enabled, adding a consequential marker to a test that
 # currently PASSES on a listed backend turns it into an unexpected pass (xpass) and FAILS -- so add
 # a consequential marker only once the test genuinely fails on that backend, and validate per-backend.
+# `uses_dace` is the one exception to "index-only is safe to add": it selects the nox test matrix
+# (`-m "uses_dace"` vs `-m "not uses_dace"` in `noxfile.py`), so tagging a test with it *removes*
+# that test from every `internal` session, and untagging removes it from the `dace` ones.
 
 # Common list of feature markers to skip
 COMMON_SKIP_TEST_LIST = [
@@ -168,6 +243,16 @@ DACE_SKIP_TEST_LIST = (
         (USES_SCAN_IN_STENCIL, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
         (USES_SPARSE_FIELDS, XFAIL, UNSUPPORTED_MESSAGE),
         (USES_TUPLE_ITERATOR, XFAIL, UNSUPPORTED_MESSAGE),
+        (
+            USES_OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM,
+            XFAIL,
+            OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_MESSAGE,
+        ),
+        (
+            USES_OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_IN_REDUCTION,
+            XFAIL,
+            OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_MESSAGE,
+        ),
     ]
 )
 EMBEDDED_SKIP_LIST = [
@@ -179,9 +264,27 @@ EMBEDDED_SKIP_LIST = [
     ),  # we can't extract the field type from scan args
     (EMBEDDED_CONCAT_WHERE_INFINITE_DOMAIN, XFAIL, UNSUPPORTED_MESSAGE),
     (EMBEDDED_CONCAT_WHERE_NON_CONTIGUOUS_DOMAIN, XFAIL, UNSUPPORTED_MESSAGE),
+    (
+        USES_OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_IN_REDUCTION,
+        XFAIL,
+        OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_MESSAGE,
+    ),
 ]
 JAX_EMBEDDED_SKIP_LIST = EMBEDDED_SKIP_LIST + [
     (USES_PROGRAM_WITH_SLICED_OUT_ARGUMENTS, XFAIL, UNSUPPORTED_MESSAGE),
+]
+#: under a tracing compiler, scalar arguments are traced unless they are in `static_params`
+TRACED_SCALARS_SKIP_LIST = [
+    (USES_SCALAR_IN_CONTROL_FLOW, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_SCALAR_IN_DOMAIN, XFAIL, UNSUPPORTED_MESSAGE),
+    (USES_SCAN_CARRY_IN_CONTROL_FLOW, XFAIL, UNSUPPORTED_MESSAGE),
+]
+JAX_JIT_SKIP_LIST = JAX_EMBEDDED_SKIP_LIST + TRACED_SCALARS_SKIP_LIST
+TORCH_COMPILE_SKIP_LIST = EMBEDDED_SKIP_LIST + TRACED_SCALARS_SKIP_LIST
+# TODO(havogt): inductor builds CPU code with `$CXX`, which is `hipcc` on the ROCm CI and fails
+TORCH_COMPILE_CPU_MESSAGE = "'torch.compile' on CPU is skipped for now."
+ARRAY_API_STRICT_EMBEDDED_SKIP_LIST = EMBEDDED_SKIP_LIST + [
+    (USES_MATH_OUTSIDE_ARRAY_API, XFAIL, "Not in the Array API standard."),
 ]
 ROUNDTRIP_SKIP_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
     (USES_PROGRAM_METRICS, XFAIL, UNSUPPORTED_MESSAGE),
@@ -189,7 +292,15 @@ ROUNDTRIP_SKIP_LIST = DOMAIN_INFERENCE_SKIP_LIST + [
     (USES_TUPLES_ARGS_WITH_DIFFERENT_BUT_PROMOTABLE_DIMS, XFAIL, UNSUPPORTED_MESSAGE),
     (USES_CONCAT_WHERE, XFAIL, UNSUPPORTED_MESSAGE),
 ]
-GTIR_EMBEDDED_SKIP_LIST = ROUNDTRIP_SKIP_LIST + []
+GTIR_EMBEDDED_SKIP_LIST = ROUNDTRIP_SKIP_LIST + [
+    # NOTE: not in `ROUNDTRIP_SKIP_LIST`: the roundtrip backend passes this, only the
+    # lower-level `iterator/embedded.py` execution keys on the local dimension's name.
+    (
+        USES_OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_IN_REDUCTION,
+        XFAIL,
+        OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_MESSAGE,
+    ),
+]
 GTFN_SKIP_TEST_LIST = (
     COMMON_SKIP_TEST_LIST
     + DOMAIN_INFERENCE_SKIP_LIST
@@ -200,6 +311,12 @@ GTFN_SKIP_TEST_LIST = (
         (USES_STRIDED_NEIGHBOR_OFFSET, XFAIL, BINDINGS_UNSUPPORTED_MESSAGE),
         # max_over broken, see https://github.com/GridTools/gt4py/issues/1289
         (USES_MAX_OVER, XFAIL, UNSUPPORTED_MESSAGE),
+        # NOTE: only the reduction; #1789 lifted this for the shift path.
+        (
+            USES_OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_IN_REDUCTION,
+            XFAIL,
+            OFFSET_TAG_DIFFERING_FROM_LOCAL_DIM_MESSAGE,
+        ),
     ]
 )
 
@@ -209,12 +326,16 @@ BACKEND_SKIP_TEST_MATRIX = {
     EmbeddedIds.NUMPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.CUPY_EXECUTION: EMBEDDED_SKIP_LIST,
     EmbeddedIds.JAX_NUMPY_EXECUTION: JAX_EMBEDDED_SKIP_LIST,
+    EmbeddedIds.ARRAY_API_STRICT_EXECUTION: ARRAY_API_STRICT_EMBEDDED_SKIP_LIST,
+    EmbeddedIds.TORCH_EXECUTION: EMBEDDED_SKIP_LIST,
+    EmbeddedIds.TORCH_CUDA_EXECUTION: EMBEDDED_SKIP_LIST,
     OptionalProgramBackendId.DACE_CPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_GPU: DACE_SKIP_TEST_LIST,
     OptionalProgramBackendId.DACE_CPU_NO_OPT: DACE_SKIP_TEST_LIST,
+    OptionalProgramBackendId.JAX_JIT: JAX_JIT_SKIP_LIST,
+    OptionalProgramBackendId.TORCH_COMPILE: [(ALL, SKIP, TORCH_COMPILE_CPU_MESSAGE)],
+    OptionalProgramBackendId.TORCH_COMPILE_CUDA: TORCH_COMPILE_SKIP_LIST,
     ProgramBackendId.GTFN_CPU: GTFN_SKIP_TEST_LIST
-    + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
-    ProgramBackendId.GTFN_CPU_IMPERATIVE: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],
     ProgramBackendId.GTFN_GPU: GTFN_SKIP_TEST_LIST
     + [(USES_SCAN_NESTED, XFAIL, UNSUPPORTED_MESSAGE)],

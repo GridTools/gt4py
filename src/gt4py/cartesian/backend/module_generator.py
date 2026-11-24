@@ -25,7 +25,7 @@ from gt4py.cartesian.gtc.passes.gtir_pipeline import GtirPipeline
 from gt4py.cartesian.gtc.passes.oir_access_kinds import compute_access_kinds
 from gt4py.cartesian.gtc.passes.oir_optimizations.utils import compute_fields_extents
 from gt4py.cartesian.gtc.utils import dimension_flags_to_names
-from gt4py.eve import codegen
+from gt4py.eve import formatting
 
 
 if TYPE_CHECKING:
@@ -150,8 +150,8 @@ class BaseModuleGenerator(abc.ABC):
             implementation=self.generate_implementation(),
         )
         if self.builder.options.as_dict()["format_source"]:
-            module_source = codegen.format_source(
-                "python", module_source, line_length=self.SOURCE_LINE_LENGTH
+            module_source = formatting.format_python_source(
+                module_source, line_length=self.SOURCE_LINE_LENGTH
             )
 
         return module_source
@@ -208,7 +208,7 @@ class BaseModuleGenerator(abc.ABC):
         """
         if self.builder.gtir.sources is not None:
             return {
-                key: codegen.format_source("python", value, line_length=self.SOURCE_LINE_LENGTH)
+                key: formatting.format_python_source(value, line_length=self.SOURCE_LINE_LENGTH)
                 for key, value in self.builder.gtir.sources.items()
             }
         return {}

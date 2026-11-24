@@ -7,15 +7,17 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 
-from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg import build_sdfg_from_gtir
+from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg import lower_program_to_sdfg
 from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_utils import (
     flatten_tuple_fields,
     get_map_variable,
+    safe_replace_symbolic,
 )
 
 
 __all__ = [
-    "build_sdfg_from_gtir",
     "flatten_tuple_fields",
     "get_map_variable",
+    "lower_program_to_sdfg",
+    "safe_replace_symbolic",
 ]

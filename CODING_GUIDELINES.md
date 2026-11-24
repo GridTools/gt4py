@@ -13,7 +13,7 @@ To keep technical debt at acceptable levels, design and implementation of new fe
 5. _Do not repeat yourself_ ([DRY](https://en.wikipedia.org/wiki/Don%27t_repeat_yourself)): if you are writing the same code snippet in several places, extract it into a function.
 6. Use meaningful names: the purpose of an object should be clear from its name. Usually, class names are nouns and function names are verbs.
 
-Remember that important design decisions should be properly documented for future reference and to share the knowledge with other developers. We decided to use lightweight _Architecture Decision Records_ (ADRs) for this purpose. The full list of ADRs and documentation for writing new ones can be found in [docs/functional/architecture/Index.md](docs/functional/architecture/Index.md).
+Remember that important design decisions should be properly documented for future reference and to share the knowledge with other developers. We decided to use lightweight _Architecture Decision Records_ (ADRs) for this purpose. The full list of ADRs and documentation for writing new ones can be found in [docs/development/ADRs/README.md](docs/development/ADRs/README.md).
 
 ## Code Style
 

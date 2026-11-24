@@ -10,48 +10,61 @@
 
 from __future__ import annotations
 
-from typing import Optional, Sequence, TypeVar, Union
+from typing import Optional, Sequence, Union
 
 import dace
 from dace import data as dace_data, subsets as dace_sbs, symbolic as dace_sym
 from dace.libraries import standard as dace_stdlib
-from dace.sdfg import graph as dace_graph, nodes as dace_nodes
-from dace.transformation import pass_pipeline as dace_ppl
+from dace.sdfg import dealias as dace_dealias, graph as dace_graph, nodes as dace_nodes
 from dace.transformation.passes import analysis as dace_analysis
 from ordered_set import OrderedSet
 
 from gt4py.next.program_processors.runners.dace import library_nodes as gtx_lib
 
 
-_PassT = TypeVar("_PassT", bound=dace_ppl.Pass)
+def gt_collect_symbols_written_in_sdfg(sdfg: dace.SDFG) -> OrderedSet[str]:
+    """Returns symbols assigned or bound inside the SDFG.
+
+    This includes symbols assigned on interstate edges, introduced by control-flow
+    regions, and used as map parameters.
+    """
+    written_symbols: OrderedSet[str] = OrderedSet()
+    for isedge in sdfg.all_interstate_edges():
+        written_symbols.update(isedge.data.assignments.keys())
+    for region in sdfg.all_control_flow_regions():
+        written_symbols.update(region.new_symbols(sdfg.symbols).keys())
+    for state in sdfg.states():
+        for node in state.nodes():
+            if isinstance(node, dace_nodes.MapEntry):
+                written_symbols.update(node.params)
+
+    return written_symbols
 
 
-def gt_make_transients_persistent(
+def gt_configure_transient_lifetime(
     sdfg: dace.SDFG,
-    device: dace.DeviceType,
+    lifetime: dace.AllocationLifetime,
 ) -> dict[int, set[str]]:
     """
-    Changes the lifetime of certain transients to `Persistent`.
+    Configure transient lifetime for eligible data nodes in the given SDFG and all nested SDFGs.
 
-    A persistent lifetime means that the transient is allocated only the very first
-    time the SDFG is executed and only deallocated if the underlying `CompiledSDFG`
-    object goes out of scope. The main advantage is, that memory must not be
-    allocated every time the SDFG is run. The downside is that the SDFG can not be
-    called by different threads.
+    Eligible data nodes are transient arrays or scalars excluding:
+    - data nodes with storage type `Register` (relevant for scalars)
+    - data nodes with lifetime `External` (already externally managed)
+    - data nodes used inside a scope (e.g., maps)
+    - data nodes whose size is not fully determined by the SDFG's free symbols (dynamic allocations)
 
     Args:
         sdfg: The SDFG to process.
-        device: The device type.
+        lifetime: The desired lifetime to set for eligible transient data nodes.
 
     Returns:
-        A `dict` mapping SDFG IDs to a set of transient arrays that
-        were made persistent.
-
-    Note:
-        This function is based on a similar function in DaCe. However, the DaCe
-        function does, for unknown reasons, also reset the `wcr_nonatomic` property,
-        but only for GPU.
+        A dictionary mapping SDFG configuration IDs to the data node names whose
+        lifetimes were modified.
     """
+    if lifetime not in {dace.AllocationLifetime.Persistent, dace.AllocationLifetime.External}:
+        raise ValueError(f"Unsupported transient lifetime '{lifetime}'.")
+
     result: dict[int, set[str]] = {}
     for nsdfg in sdfg.all_sdfgs_recursive():
         fsyms: set[str] = nsdfg.free_symbols
@@ -70,6 +83,7 @@ def gt_make_transients_persistent(
 
                 desc = dnode.desc(nsdfg)
                 if not desc.transient or type(desc) not in {dace.data.Array, dace.data.Scalar}:
+                    # TODO(phimuell): Find out why scalars are processed.
                     not_modify_lifetime.add(dnode.data)
                     continue
                 if desc.storage == dace.StorageType.Register:
@@ -81,10 +95,8 @@ def gt_make_transients_persistent(
                     continue
 
                 # If the data is referenced inside a scope, such as a map, it might be possible
-                #  that it is only used inside that scope. If we would make it persistent, then
-                #  it would essentially be allocated outside and be shared among the different
-                #  map iterations. So we can not make it persistent.
-                #  The downside is, that we might have to perform dynamic allocation.
+                #  that it is only used inside that scope. If we would make it global-lifetime,
+                #  it would effectively be shared among map iterations, which is unsafe.
                 if scope_dict[dnode] is not None:
                     not_modify_lifetime.add(dnode.data)
                     continue
@@ -100,13 +112,24 @@ def gt_make_transients_persistent(
                 except AttributeError:  # total_size is an integer / has no free symbols
                     pass
 
-                # Make it persistent.
                 modify_lifetime.add(dnode.data)
 
-        # Now setting the lifetime.
         result[nsdfg.cfg_id] = modify_lifetime - not_modify_lifetime
         for aname in result[nsdfg.cfg_id]:
-            nsdfg.arrays[aname].lifetime = dace.AllocationLifetime.Persistent
+            adesc = nsdfg.arrays[aname]
+            adesc.lifetime = lifetime
+            if adesc.storage == dace.StorageType.Default and isinstance(adesc, dace.data.Array):
+                # GPU transformation have already changed the storage for GPU arrays.
+                # NOTE: If we do not change the storage during lowering / transformations,
+                #  it will be done in code generation when calling `sdfg.compile()`.
+                #  This side effect is a potential issue, because we do not store
+                #  the program handle, see `sdfg.compile(return_program_handle=False)`
+                #  in `compilation.py`; therefore, we do not have the modified SDFG.
+                #  The original SDFG is deserialized, at call time, and the storage
+                #  type is reset to `Default`. This is a problem for arrays with
+                #  external storage, because `CompiledSDFG.set_workspace()` will
+                #  try to load a symbol from the library for the wrong storage type.
+                adesc.storage = dace.StorageType.CPU_Heap
 
     return result
 
@@ -538,12 +561,29 @@ def reconfigure_dataflow_after_rerouting(
                 assert subset_to_adjust is not None
                 subset_to_adjust.offset(ss_offset, negative=False)
 
+            # A NestedSDFG inside the Map scope now accesses `new_node`.
+            nested_node, nested_conn = (
+                (edge_to_adjust.src, edge_to_adjust.src_conn)
+                if is_producer_edge
+                else (edge_to_adjust.dst, edge_to_adjust.dst_conn)
+            )
+            if isinstance(nested_node, dace_nodes.NestedSDFG):
+                restate_nested_sdfg_connector(
+                    nsdfg_node=nested_node,
+                    connector=nested_conn,
+                    new_desc=new_node.desc(sdfg),
+                    ss_offset=ss_offset,
+                )
+
     elif isinstance(other_node, dace_nodes.NestedSDFG):
-        # We have obviously to adjust the strides, however, this is done outside
-        #  this function.
-        # TODO(phimuell): Look into the implication that we not necessarily pass
-        #  the full array, but essentially slice a bit.
-        pass
+        # The connector has to be equivalent to `new_node`, which also sets the
+        #  strides, and the accesses inside have to be shifted.
+        restate_nested_sdfg_connector(
+            nsdfg_node=other_node,
+            connector=new_edge.src_conn if is_producer_edge else new_edge.dst_conn,
+            new_desc=new_node.desc(sdfg),
+            ss_offset=ss_offset,
+        )
 
     elif isinstance(other_node, (dace_stdlib.Reduce, gtx_lib.ReduceWithSkipValues)):
         # For now we only handle the case that the reduction node is writing into
@@ -565,6 +605,77 @@ def reconfigure_dataflow_after_rerouting(
         raise NotImplementedError(
             f"The case for '{type(other_node).__name__}' has not been implemented."
         )
+
+
+def restate_nested_sdfg_connector(
+    nsdfg_node: dace_nodes.NestedSDFG,
+    connector: str,
+    new_desc: dace_data.Data,
+    ss_offset: Sequence[dace_sym.SymExpr] | None,
+) -> None:
+    """Restates `connector` of `nsdfg_node` as the new data connected to it.
+
+    In the SDFG IR a connector of a NestedSDFG is not a view: it is equivalent to
+    the data connected to it on the outside, i.e. it has the same shape and strides,
+    and the accesses inside use the coordinates of that data. When a transformation
+    connects different data to the connector, e.g. through `reroute_edge()`, the
+    connector has to adopt `new_desc` and every access inside the NestedSDFG, and
+    inside the NestedSDFGs below it, has to be shifted by `ss_offset`.
+
+    Args:
+        nsdfg_node: The NestedSDFG whose connector is connected to different data.
+        connector: The name of the connector, and of the data inside the NestedSDFG.
+        new_desc: The data descriptor of the data that is now connected to `connector`.
+        ss_offset: The position of the old data inside the new one, i.e. the offset
+            that has to be added to the accesses. If `None` then `new_desc` has to
+            be a scalar.
+
+    Raises:
+        NotImplementedError: If the new data has a different rank than the old one, or
+            if a symbol used by `new_desc` or `ss_offset` has a different meaning
+            inside the NestedSDFG.
+    """
+    nsdfg = nsdfg_node.sdfg
+    old_desc = nsdfg.arrays[connector]
+    if ss_offset is None:
+        if not isinstance(new_desc, dace_data.Scalar):
+            raise TypeError(f"Passed 'None' as 'ss_offset' but '{new_desc}' is not a scalar.")
+    elif len(old_desc.shape) != len(new_desc.shape) or len(ss_offset) != len(new_desc.shape):
+        raise NotImplementedError(
+            f"Can not restate the connector '{connector}' of NestedSDFG '{nsdfg_node.label}'"
+            f" with shape {old_desc.shape} as data with shape {new_desc.shape}."
+        )
+
+    # The symbols are passed 1:1 into the NestedSDFG, thus they must not be used there
+    #  for something else.
+    passed_symbols = {str(sym) for sym in new_desc.free_symbols}
+    if ss_offset is not None:
+        passed_symbols.update(
+            str(sym) for off in ss_offset if dace_sym.issymbolic(off) for sym in off.free_symbols
+        )
+    inner_written_symbols = gt_collect_symbols_written_in_sdfg(nsdfg)
+    for sym in sorted(passed_symbols):
+        # Note that the default value passed to `get()` is the symbol itself, because missing
+        #  symbols are added automatically.
+        if (
+            sym in nsdfg.arrays
+            or sym in inner_written_symbols
+            or str(nsdfg_node.symbol_mapping.get(sym, sym)) != sym
+        ):
+            raise NotImplementedError(
+                f"Can not restate the connector '{connector}' of NestedSDFG '{nsdfg_node.label}',"
+                f" because the symbol '{sym}' has a different meaning inside it."
+            )
+
+    # TODO(phimuell): The `reduce_connector()` function should be replaced with something
+    #  that does not create views as a side effect.
+    dace_dealias.reduce_connector(
+        nsdfg,
+        connector,
+        reduced_desc=new_desc,
+        # Where the origin of the new data is located in the coordinates of the old data.
+        offset=None if ss_offset is None else [-off for off in ss_offset],
+    )
 
 
 def find_upstream_nodes(
@@ -629,8 +740,10 @@ def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
 
         curr_out_edges = [oedge.dst for oedge in graph.out_edges(state)]
 
-        # End recursion if we found some successor edges or we have reached the top.
-        if len(curr_out_edges) > 0 or graph.parent_graph is state.sdfg:
+        # End recursion if we found some successor edges or we have reached the
+        #  top of the control-flow hierarchy. Note that the root region's
+        #  `parent_graph` is `None`, not the SDFG itself.
+        if len(curr_out_edges) > 0 or graph.parent_graph is None:
             return curr_out_edges
         elif isinstance(graph.parent_graph, dace.sdfg.state.ConditionalBlock):
             # For conditional we go two levels up, because there is nothing
@@ -651,7 +764,7 @@ def find_successor_state(state: dace.SDFGState) -> list[dace.SDFGState]:
         if isinstance(successor, dace.SDFGState):
             all_successors.append(successor)
         else:
-            all_successors.extend(successor.all_states())
+            all_successors.extend(successor.states())
 
     return all_successors
 
@@ -798,7 +911,7 @@ def gt_data_descriptor_mapping(
         nsdfg: The nested SDFG node we want to process.
         only_fully_mapped: Only look at the fully mapped data.
         only_inputs: Only consider the data that are used as inputs.
-        only_inputs: Only consider the data that are used as outputs.
+        only_outputs: Only consider the data that are used as outputs.
     """
     assert not (only_inputs and only_outputs)
     name_mapping: dict[str, str] = {}
@@ -825,7 +938,7 @@ def gt_data_descriptor_mapping(
 
     oedges = sorted(
         (oedge for oedge in state.out_edges(nsdfg) if not oedge.data.is_empty()),
-        key=lambda oedge: iedge.src_conn,
+        key=lambda oedge: oedge.src_conn,
     )
     for oedge in oedges:
         data_outside = oedge.data.data

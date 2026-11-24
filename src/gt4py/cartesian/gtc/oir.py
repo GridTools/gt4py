@@ -15,6 +15,7 @@ e.g. stage merging, staged computations to compute-on-the-fly, cache annotations
 
 from __future__ import annotations
 
+import numbers
 from typing import Any, List, Optional, Tuple, Type, Union
 
 from gt4py import eve
@@ -131,7 +132,7 @@ class Decl(LocNode):
 
 class FieldDecl(Decl):
     dimensions: Tuple[bool, bool, bool]
-    data_dims: Tuple[int, ...] = eve.field(default_factory=tuple)
+    data_dims: Tuple[numbers.Integral, ...] = eve.field(default_factory=tuple)
 
 
 class ScalarDecl(Decl):

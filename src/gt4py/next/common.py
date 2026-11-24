@@ -9,23 +9,15 @@
 from __future__ import annotations
 
 import abc
-import collections
 import dataclasses
 import enum
 import functools
 import math
-import sys
 import types
-from collections.abc import Iterable, Mapping, Sequence
-
-import numpy as np
-
-from gt4py._core import definitions as core_defs
-from gt4py.eve import extended_typing as xtyping, utils
-from gt4py.eve.extended_typing import (
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import (
     TYPE_CHECKING,
     Any,
-    Callable,
     ClassVar,
     Final,
     Generic,
@@ -35,7 +27,6 @@ from gt4py.eve.extended_typing import (
     NoReturn,
     Optional,
     ParamSpec,
-    Protocol,
     Self,
     TypeAlias,
     TypeGuard,
@@ -44,8 +35,14 @@ from gt4py.eve.extended_typing import (
     Unpack,
     cast,
     overload,
-    runtime_checkable,
 )
+
+import numpy as np
+from typing_extensions import Protocol, runtime_checkable
+
+from gt4py._core import definitions as core_defs
+from gt4py._core.ndarray_utils import BufferInfo as BufferInfo
+from gt4py.eve import utils, xtyping
 from gt4py.eve.type_definitions import StrEnum
 
 
@@ -112,8 +109,7 @@ class Dimension:
         if isinstance(value, Dimension):
             return self.value == value.value and self.kind == value.kind
         if isinstance(value, core_defs.INTEGRAL_TYPES):
-            int_value = cast(core_defs.IntegralScalar, value)
-            return Domain(dims=(self,), ranges=(UnitRange(int_value, int_value + 1),))
+            return Domain(dims=(self,), ranges=(UnitRange(value, value + 1),))
         # This will fallback to default identity comparison if reflection also returns `NotImplemented`,
         # which does identity comparison, see https://docs.python.org/3/reference/datamodel.html#object.__eq__.
         return NotImplemented
@@ -895,73 +891,6 @@ PRIMITIVE_VALUE_TYPES: Final[tuple[type[PrimitiveValue], ...]] = xtyping.get_rep
 
 
 @dataclasses.dataclass(frozen=True)
-class BufferInfo:
-    """Holds information about a buffer in memory."""
-
-    data_ptr: int
-    ndim: int
-    shape: tuple[int, ...]
-    elem_strides: tuple[int, ...]
-    byte_strides: tuple[int, ...]
-    device: core_defs.Device
-
-    @classmethod
-    def from_ndarray(cls, ndarray: core_defs.NDArrayObject) -> BufferInfo:
-        # TODO(egparedes): Implement this function using __dlpack__ and ctypes.
-        #   The current implementation is messy and only works for numpy and cupy.
-        try:
-            array_ns = ndarray.__array_namespace__()  # type: ignore[attr-defined]
-        except AttributeError:
-            array_ns = sys.modules[ndarray.__class__.__module__]
-
-        array_byte_bounds_func = (
-            getattr(array_ns, "byte_bounds", None) or array_ns.lib.array_utils.byte_bounds
-        )
-
-        data_ptr = array_byte_bounds_func(ndarray)[0]
-        ndim = ndarray.ndim
-        shape = ndarray.shape
-        byte_strides = ndarray.strides
-        elem_strides = tuple(s // ndarray.dtype.itemsize for s in byte_strides)
-
-        try:
-            device = core_defs.from_dlpack_device(ndarray.__dlpack_device__())  # type: ignore[attr-defined]
-        except AttributeError as err:
-            ns = ndarray.__class__.__module__
-            if ns.startswith("numpy"):
-                device = core_defs.Device(core_defs.DeviceType.CPU, 0)
-            elif ns.startswith("cupy"):
-                device = core_defs.Device(core_defs.CUPY_DEVICE_TYPE, ndarray.device.id)  # type: ignore[attr-defined]
-            else:
-                raise RuntimeError(f"Unsupported ndarray type '{type(ndarray)}'") from err
-
-        return BufferInfo(
-            data_ptr=data_ptr,
-            ndim=ndim,
-            shape=shape,
-            elem_strides=elem_strides,
-            byte_strides=byte_strides,
-            device=device,
-        )
-
-    @functools.cached_property
-    def hash_key(self) -> int:
-        return hash(
-            (
-                self.data_ptr,
-                self.ndim,
-                self.shape,
-                self.elem_strides,
-                self.byte_strides,
-                self.device,
-            )
-        )
-
-    def __hash__(self) -> int:
-        return self.hash_key
-
-
-@dataclasses.dataclass(frozen=True)
 class ConnectivityType:  # TODO(havogt): would better live in type_specifications but would have to solve a circular import
     domain: tuple[Dimension, ...]
     codomain: Dimension
@@ -1020,7 +949,7 @@ class Connectivity(Field[DimsT, core_defs.IntegralScalar], Protocol[DimsT, DimT_
             )
 
     @abc.abstractmethod
-    def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]: ...
+    def _inverse_image(self, image_range: UnitRange) -> Sequence[NamedRange]: ...
 
     @property
     @abc.abstractmethod
@@ -1299,16 +1228,7 @@ class CartesianConnectivity(Connectivity[Dims[DomainDimT], DimT]):
     def for_relocation(cls, old: DimT, new: DomainDimT) -> CartesianConnectivity[DomainDimT, DimT]:
         return cls(new, codomain=old)
 
-    def inverse_image(self, image_range: UnitRange | NamedRange) -> Sequence[NamedRange]:
-        if not isinstance(image_range, UnitRange):
-            if image_range.dim != self.codomain:
-                raise ValueError(
-                    f"Dimension '{image_range.dim}' does not match the codomain dimension '{self.codomain}'."
-                )
-
-            image_range = image_range.unit_range
-
-        assert isinstance(image_range, UnitRange)
+    def _inverse_image(self, image_range: UnitRange) -> Sequence[NamedRange]:
         return (named_range((self.domain_dim, image_range - self.offset)),)
 
     def premap(
@@ -1346,6 +1266,11 @@ def order_dimensions(dims: Iterable[Dimension]) -> list[Dimension]:
 
 
 def check_dims(dims: Sequence[Dimension]) -> None:
+    _check_dims(tuple(dims))
+
+
+@functools.cache
+def _check_dims(dims: tuple[Dimension, ...]) -> None:
     # A dimension and its staggered counterpart (i.e. sharing the same non-staggered base dimension)
     # denote different grid locations and must not appear together in the same field/domain: mixing
     # them is ambiguous (it makes `order_dimensions` non-total and produces duplicate backend tags).
@@ -1392,50 +1317,18 @@ def promote_dims(*dims_list: Sequence[Dimension]) -> list[Dimension]:
         ...
         ValueError: There are more than one dimension with DimensionKind 'LOCAL'.
     """
+    return list(_promote_dims(tuple(tuple(dims) for dims in dims_list)))
 
+
+@functools.cache
+def _promote_dims(dims_list: tuple[tuple[Dimension, ...], ...]) -> tuple[Dimension, ...]:
     for dims in dims_list:
-        check_dims(list(dims))
+        check_dims(dims)
     unique_dims = {dim for dims in dims_list for dim in dims}
 
     promoted_dims = order_dimensions(unique_dims)
     check_dims(promoted_dims)
-    return promoted_dims
-
-
-class FieldBuiltinFuncRegistry:
-    """
-    Mixin for adding `fbuiltins` registry to a `Field`.
-
-    Subclasses of a `Field` with `FieldBuiltinFuncRegistry` get their own registry,
-    dispatching (via ChainMap) to its parent's registries.
-    """
-
-    _builtin_func_map: collections.ChainMap[fbuiltins.BuiltInFunction, Callable] = (
-        collections.ChainMap()
-    )
-
-    def __init_subclass__(cls, **kwargs: Any) -> None:
-        cls._builtin_func_map = collections.ChainMap(
-            {},  # New empty `dict` for new registrations on this class
-            *[
-                c.__dict__["_builtin_func_map"].maps[0]  # adding parent `dict`s in mro order
-                for c in cls.__mro__
-                if "_builtin_func_map" in c.__dict__
-            ],
-        )
-
-    @classmethod
-    def register_builtin_func(
-        cls, /, op: fbuiltins.BuiltInFunction[_R, _P], op_func: Optional[Callable[_P, _R]] = None
-    ) -> Any:
-        assert op not in cls._builtin_func_map
-        if op_func is None:  # when used as a decorator
-            return functools.partial(cls.register_builtin_func, op)
-        return cls._builtin_func_map.setdefault(op, op_func)
-
-    @classmethod
-    def __gt_builtin_func__(cls, /, func: fbuiltins.BuiltInFunction[_R, _P]) -> Callable[_P, _R]:
-        return cls._builtin_func_map.get(func, NotImplemented)
+    return tuple(promoted_dims)
 
 
 #: Numeric value used to represent missing values in connectivities.
@@ -1474,7 +1367,7 @@ def connectivity_for_cartesian_shift(dim: Dimension, offset: int | float) -> Car
     `flip_staggered(dim)`).
 
     The half-integer case encodes the convention that a staggered index sits half a cell *below*
-    its base index (see ADR 0024): `IHalf(0)` is the edge below `I(0)`. Because of this asymmetry,
+    its base index (see ADR 0026): `IHalf(0)` is the edge below `I(0)`. Because of this asymmetry,
     shifting out of a non-staggered dimension needs a `+1` index correction that shifting out of a
     staggered dimension does not, e.g. `I + 0.5` maps `I(i)` to `IHalf(i+1)` (position `i+½`) while
     `IHalf + 0.5` maps `IHalf(i)` to `I(i)`.

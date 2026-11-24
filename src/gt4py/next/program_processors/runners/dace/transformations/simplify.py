@@ -474,15 +474,34 @@ def gt_reduce_distributed_buffering(
     sdfg: dace.SDFG,
     validate: bool = True,
     validate_all: bool = False,
-) -> Optional[dict[dace.SDFG, dict[dace.SDFGState, set[str]]]]:
-    """Removes distributed write back buffers."""
-    pipeline = dace_ppl.Pipeline([DistributedBufferRelocator()])
-    all_result = {}
+) -> Optional[dict[dace.SDFG, dict[str, dict[dace.SDFGState, set[str]]]]]:
+    """Removes distributed write back buffers.
 
+    `DistributedBufferRelocator` is applied to `sdfg` and to all of its nested SDFGs.
+    The function returns `None` if nothing was relocated. Otherwise it returns a
+    `dict` that maps every SDFG in which a relocation happened to
+    `{"DistributedBufferRelocator": <result of the pass>}`.
+
+    Note:
+        The analyses the pass depends on are computed once for the whole SDFG
+        hierarchy, their results are indexed by `cfg_id`. A relocation only modifies
+        the SDFG it is performed in, thus it does not invalidate the results of the
+        other SDFGs, and every SDFG is processed only once.
+    """
+    relocator = DistributedBufferRelocator()
+    analysis_results = dace_ppl.Pipeline(
+        [
+            dace_transformation.passes.StateReachability(),
+            dace_transformation.passes.FindAccessStates(),
+        ]
+    ).apply_pass(sdfg, {})
+    assert analysis_results is not None
+
+    all_result: dict[dace.SDFG, dict[str, dict[dace.SDFGState, set[str]]]] = {}
     for rsdfg in sdfg.all_sdfgs_recursive():
-        ret = pipeline.apply_pass(sdfg, {})
+        ret = relocator.apply_pass(rsdfg, analysis_results)
         if ret is not None:
-            all_result[rsdfg] = ret
+            all_result[rsdfg] = {type(relocator).__name__: ret}
 
         if validate_all:
             rsdfg.validate()
@@ -530,6 +549,11 @@ class DistributedBufferRelocator(dace_transformation.Pass):
         the data is stored inside `temp_storage`. This check will ignore empty Memlets.
     - There is a `dest_storage` access node, that has an output degree larger
         than one.
+
+    Furthermore, the relocation will not happen if the state where `temp_storage`
+    is defined is nested inside a loop region. There the write back would be
+    executed in every iteration, potentially on data that the loop has only
+    written partially.
 
     Note:
         - Essentially this transformation removes the double buffering of
@@ -670,17 +694,22 @@ class DistributedBufferRelocator(dace_transformation.Pass):
         #  I.e. This is also the location where the temporary source was initialized.
         result_candidates: list[tuple[AccessLocation, list[AccessLocation]]] = []
 
-        def find_upstream_states(dst_state: dace.SDFGState) -> set[dace.SDFGState]:
-            return {
+        def find_upstream_states(dst_state: dace.SDFGState) -> list[dace.SDFGState]:
+            return [
                 src_state
                 for src_state in sdfg.states()
                 if dst_state in reachable[src_state] and dst_state is not src_state
-            }
+            ]
 
         for temp_storage in candidate_temp_storage:
             temp_storage_node, temp_storage_state = temp_storage
             def_locations: list[AccessLocation] = []
             for upstream_state in find_upstream_states(temp_storage_state):
+                if self._is_inside_loop(sdfg, upstream_state):
+                    # The definition of `temp_storage` is inside a loop. Moving the
+                    #  write back there would execute it in every iteration, thus
+                    #  on data that has potentially only been written partially.
+                    continue
                 if self._is_written_to_in_state(
                     data=temp_storage_node.data,
                     state=upstream_state,
@@ -763,6 +792,28 @@ class DistributedBufferRelocator(dace_transformation.Pass):
                 result.append((wb_location, def_locations))
 
         return result
+
+    def _is_inside_loop(
+        self,
+        sdfg: dace.SDFG,
+        state: dace.SDFGState,
+    ) -> bool:
+        """Checks if `state` is located inside a loop region.
+
+        Args:
+            sdfg: The SDFG on which we operate.
+            state: The state that should be examined.
+
+        Returns:
+            `True` if `state` is nested inside a `LoopRegion`, at any depth,
+            `False` otherwise.
+        """
+        scope = state.parent_graph
+        while scope is not None and scope is not sdfg:
+            if isinstance(scope, dace.sdfg.state.LoopRegion):
+                return True
+            scope = scope.parent_graph
+        return False
 
     def _is_written_to_in_state(
         self,
@@ -1013,7 +1064,7 @@ class GT4PyMoveTaskletIntoMap(dace_transformation.SingleStateTransformation):
         inner_tasklet: dace_nodes.Tasklet = graph.add_tasklet(
             name=next(self._uids[f"{tasklet.label}__clone"]),
             outputs=tasklet.out_connectors.keys(),
-            inputs=set(),
+            inputs={},
             code=tasklet.code,
             language=tasklet.language,
             debuginfo=tasklet.debuginfo,
@@ -1297,9 +1348,6 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
             tmp_out_subset = dace_subsets.Range.from_array(tmp_desc)
         assert glob_in_subset is not None
 
-        # Recursively visit the nested SDFGs for mapping of strides from inner to outer array
-        gtx_transformations.gt_map_strides_to_src_nested_sdfg(sdfg, graph, map_to_tmp_edge, glob_ac)
-
         # We now remove the `tmp` node, and create a new connection between
         #  the global node and the map exit.
         new_map_to_glob_edge = graph.add_edge(
@@ -1337,3 +1385,12 @@ class GT4PyMapBufferElimination(dace_transformation.SingleStateTransformation):
                 curr_edge.data.data = glob_data
             if curr_dst_subset is not None:
                 curr_dst_subset.offset(correcting_offset, negative=False)
+            # A NestedSDFG inside the Map now writes into `G`, thus its connector,
+            #  which has to be equivalent to the data connected to it, is restated.
+            if isinstance(curr_edge.src, dace_nodes.NestedSDFG):
+                gtx_transformations.utils.restate_nested_sdfg_connector(
+                    nsdfg_node=curr_edge.src,
+                    connector=curr_edge.src_conn,
+                    new_desc=glob_ac.desc(sdfg),
+                    ss_offset=correcting_offset.min_element(),
+                )

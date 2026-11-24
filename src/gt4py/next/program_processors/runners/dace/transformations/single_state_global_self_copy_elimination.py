@@ -562,7 +562,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
         check_only: Literal[True],
-    ) -> Union[None, dict[dace_sbs.Subset, dace_sbs.Subset]]: ...
+    ) -> Union[dict[dace_sbs.Subset, dace_sbs.Subset], None]: ...
 
     @overload
     def _compute_tmp_to_g_mapping(
@@ -581,7 +581,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
         check_only: bool,
-    ) -> Union[None, dict[dace_sbs.Subset, dace_sbs.Subset]]:
+    ) -> Union[dict[dace_sbs.Subset, dace_sbs.Subset], None]:
         """Computes a mapping that describes how `tmp` maps into `g`.
 
         The function returns a `dict`, that maps subsets of the `tmp_node`
@@ -737,7 +737,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         node_g1: dace_nodes.AccessNode,
         node_tmp: dace_nodes.AccessNode,
         node_g2: dace_nodes.AccessNode,
-    ) -> Union[None, int]:
+    ) -> Union[int, None]:
         """Tests which merging strategy should be used.
 
         By default the transformation tries to merge the three nodes together,
@@ -816,7 +816,7 @@ class SingleStateGlobalSelfCopyElimination(dace_transformation.SingleStateTransf
         #  the matching. One idea would be to use `cover()`, however, there are
         #  some rare cases where this is not possible. For that reason we use
         #  the lower bound. This might be a bit dangerous.
-        lower_bound = dace_sbs.Indices(tdesc.subset.min_element())
+        lower_bound = dace_sbs.Range.from_indices(tdesc.subset.min_element())
         associated_tmp_subset: Optional[dace_sbs.Subset] = next(
             (
                 merged_tmp_subset

@@ -26,12 +26,12 @@ This pattern could theoretically be implemented with the current tooling in gt4p
 
 ```py
 with computation(FORWARD), interval(...):
-    temporary_mask : Field[IJ, int]
+    temporary_mask: Field[IJ, int]
     if wtw < 0:
-        temporary_mask = min(temporary_mask,K)
+        temporary_mask = min(temporary_mask, K)
 with computation(FORWARD), interval(0, -1):
-    if K > temporary_mask: # ignoring the upper bound here for simplicity
-        rhoifc0j = pifc0 / ( r * 0.5 * ( thv0bot[K+1] + thv0top ) * exnifc0)
+    if K > temporary_mask:  # ignoring the upper bound here for simplicity
+        rhoifc0j = pifc0 / (r * 0.5 * (thv0bot[K + 1] + thv0top) * exnifc0)
 ```
 
 The problem with this solution is that:
@@ -75,7 +75,7 @@ def test_stencil(
 
     with computation(PARALLEL):
         with interval(0, external_scalar):
-             out_field = input_data[0, 0, 0]
+            out_field = input_data[0, 0, 0]
 
         with interval(0, scalar_arg):
             out_field[0, 0, 0] = input_data[0, 0, 0]

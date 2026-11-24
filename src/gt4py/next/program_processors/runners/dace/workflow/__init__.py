@@ -15,6 +15,7 @@ The `backend` module uses `factory` to define a workflow that implements the
 - `compilation` for compiling the SDFG into a program
 - `decoration` to parse the program arguments and pass them to the program call
 
-The GTIR-DaCe backend factory extends `CachedBackendFactory`, thus it provides
-caching of the GTIR program.
+The toolchain builders create every step from one `DaCeConfig`, and wrap the
+translation step in a persistent `CachedStep` unless the config disables it,
+thus they provide caching of the GTIR program.
 """

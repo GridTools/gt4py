@@ -20,12 +20,8 @@ import gt4py.eve as eve
 import gt4py.next.common as common
 import gt4py.next.custom_layout_allocators as next_allocators
 import gt4py.next.embedded.nd_array_field as nd_array_field
-from gt4py._core import (
-    definitions as core_defs,
-    ndarray_utils as core_ndarray_utils,
-    types as core_types,
-)
-from gt4py.eve import extended_typing as xtyping
+from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
+from gt4py.eve import xtyping
 
 
 """
@@ -80,6 +76,9 @@ class FieldConstructor:
                 device = DEFAULT_DEVICE
             # Currently we use optimized CPU layout, but possibly we could also use standard numpy allocation
             allocator = next_allocators.device_allocators[device.device_type]
+        requested = allocator
+        if next_allocators.is_field_allocator_factory(allocator):
+            allocator = allocator.__gt_allocator__
 
         if core_ndarray_utils.is_array_namespace(allocator):
             if aligned_index is not None:
@@ -97,9 +96,7 @@ class FieldConstructor:
             self._array_constructor = _ArrayAPIArrayConstructor(
                 array_ns=allocator, device=translated_device
             )
-        elif next_allocators.is_field_allocation_tool(allocator):
-            if next_allocators.is_field_allocator_factory(allocator):
-                allocator = allocator.__gt_allocator__
+        elif next_allocators.is_field_allocator(allocator):
             if device is not None and allocator.__gt_device_type__ != device.device_type:
                 raise ValueError(
                     f"Allocator {allocator} is for device type {allocator.__gt_device_type__}, but device type {device.device_type} was specified."
@@ -110,7 +107,7 @@ class FieldConstructor:
                 aligned_index=aligned_index,
             )
         else:
-            raise ValueError(f"Invalid field allocator: {allocator}.")
+            raise ValueError(f"Invalid field allocator: {requested}.")
 
     def _construct_from_array(
         self,
@@ -206,7 +203,7 @@ class FieldConstructor:
             raise ValueError(f"Cannot construct 'Field' from array of shape '{data.shape}'.")
 
         if dtype is None:
-            dtype = core_defs.dtype(data.dtype)
+            dtype = core_ndarray_utils.dtype_of(data)
 
         return self._construct_from_array(
             actual_domain,
@@ -269,7 +266,7 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
         )
 
     def _to_array_ns_dtype(self, dtype: core_defs.DType) -> Any:
-        return getattr(self.array_ns, core_types.type_to_name[dtype.scalar_type])
+        return core_ndarray_utils.namespace_dtype(self.array_ns, dtype.scalar_type)
 
     def empty(
         self,
@@ -665,7 +662,9 @@ def as_connectivity(
     """
     if skip_value is eve.NOTHING:
         skip_value = (
-            common._DEFAULT_SKIP_VALUE if (data == common._DEFAULT_SKIP_VALUE).any() else None
+            common._DEFAULT_SKIP_VALUE
+            if array_api_compat.array_namespace(data).any(data == common._DEFAULT_SKIP_VALUE)
+            else None
         )
 
     field = as_field(

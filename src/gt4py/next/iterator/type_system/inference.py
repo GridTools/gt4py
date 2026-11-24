@@ -11,10 +11,11 @@ from __future__ import annotations
 import copy
 import dataclasses
 import functools
+from collections.abc import Callable
+from typing import Any, Optional, TypeVar, Union
 
 from gt4py import eve
 from gt4py.eve import concepts
-from gt4py.eve.extended_typing import Any, Callable, Optional, TypeVar, Union
 from gt4py.next import common
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils.common_pattern_matcher import is_applied_as_fieldop, is_call_to
@@ -336,7 +337,7 @@ class ITIRTypeInference(eve.NodeTranslator):
         if isinstance(node, itir.Program):
             assert all(isinstance(param.type, ts.DataType) for param in node.params), (
                 "All parameters in 'itir.Program' must have a type "
-                "defined, as they are the starting point for type propagation.",
+                "defined, as they are the starting point for type propagation."
             )
 
         instance = cls(

@@ -27,7 +27,7 @@ from gt4py.next import (
 )
 from gt4py.next.ffront import foast_to_gtir, foast_to_past, past_to_itir
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
-from gt4py.next.otf import definitions, stages, workflow
+from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.type_system import type_info, type_specifications as ts
 
 
@@ -60,7 +60,6 @@ class EmbeddedDSL(codegen.TemplatedGenerator):
                 return f"np.{dtype}(np.nan)"
         return node.value
 
-    NoneLiteral = as_fmt("None")
     OffsetLiteral = as_fmt("{value}")
     AxisLiteral = as_fmt("{value}")
 
@@ -111,8 +110,8 @@ def ${id}(${','.join(params)}):
 
 # Caches the generated source by IR hash so re-codegen is skipped within a process.
 _SOURCE_CACHE: dict[int, tuple[str, str]] = {}
-# Caches the loaded module by source string so re-exec is skipped within a process.
-_MODULE_CACHE: dict[str, types.ModuleType] = {}
+# Caches the loaded module by source string and debug flag so re-exec is skipped within a process.
+_MODULE_CACHE: dict[tuple[str, bool], types.ModuleType] = {}
 
 
 def _generate_source(
@@ -129,7 +128,6 @@ def _generate_source(
         (
             ir,
             transforms,
-            debug,
             use_embedded,
             tuple(common.offset_provider_to_type(offset_provider).items()),
         )
@@ -142,11 +140,6 @@ def _generate_source(
     ir = transforms(ir, offset_provider=offset_provider)
 
     program = EmbeddedDSL.apply(ir)
-
-    # format output in debug mode for better debuggability
-    # (e.g. line numbers, overview in the debugger).
-    if debug:
-        program = codegen.format_python_source(program)
 
     offset_literals: Iterable[str] = (
         ir.pre_walk_values()
@@ -188,8 +181,9 @@ def _generate_source(
 
 
 def _load_module(source_code: str, debug: bool) -> types.ModuleType:
-    if source_code in _MODULE_CACHE:
-        return _MODULE_CACHE[source_code]
+    cache_key = (source_code, debug)
+    if cache_key in _MODULE_CACHE:
+        return _MODULE_CACHE[cache_key]
 
     if debug:
         # Write to a real .py so debuggers/tracebacks have file/line info.
@@ -206,7 +200,7 @@ def _load_module(source_code: str, debug: bool) -> types.ModuleType:
         mod = types.ModuleType("roundtrip_module")
         exec(compile(source_code, "<roundtrip>", "exec"), mod.__dict__)
 
-    _MODULE_CACHE[source_code] = mod
+    _MODULE_CACHE[cache_key] = mod
     return mod
 
 
@@ -225,7 +219,7 @@ class RoundtripArtifact:
     dispatch_backend: next_backend.Backend | None
     debug: bool
 
-    def load(self) -> stages.ExecutableProgram:
+    def load(self) -> artifacts.ExecutableProgram:
         mod = _load_module(self.source_code, self.debug)
         fencil = getattr(mod, self.entry_point_name)
         captured_column_axis = self.column_axis
@@ -254,13 +248,13 @@ class RoundtripArtifact:
 
 
 @dataclasses.dataclass(frozen=True)
-class Roundtrip(workflow.Workflow[definitions.CompilableProgramDef, RoundtripArtifact]):
+class Roundtrip(workflow.Workflow[stages.CompilableProgramDef, RoundtripArtifact]):
     debug: Optional[bool] = None
     use_embedded: bool = True
     dispatch_backend: Optional[next_backend.Backend] = None
     transforms: itir_transforms.GTIRTransform = itir_transforms.apply_common_transforms  # type: ignore[assignment] # TODO(havogt): cleanup interface of `apply_common_transforms`
 
-    def __call__(self, inp: definitions.CompilableProgramDef) -> RoundtripArtifact:
+    def __call__(self, inp: stages.CompilableProgramDef) -> RoundtripArtifact:
         debug = config.DEBUG if self.debug is None else self.debug
 
         source_code, entry_point_name = _generate_source(

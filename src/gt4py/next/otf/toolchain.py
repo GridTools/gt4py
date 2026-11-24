@@ -21,46 +21,44 @@ DefT = typing.TypeVar("DefT")
 ArgsT = typing.TypeVar("ArgsT")
 
 
-@dataclasses.dataclass
-class ConcreteArtifact(Generic[DefT, ArgsT]):
-    data: DefT
-    args: ArgsT
-
-
 @dataclasses.dataclass(frozen=True)
 class DataOnlyAdapter(
     workflow.ChainableWorkflowMixin,
     workflow.ReplaceEnabledWorkflowMixin,
-    workflow.Workflow[ConcreteArtifact[S, ArgsT], ConcreteArtifact[T, ArgsT]],
+    workflow.Workflow[workflow.ConcreteArtifact[S, ArgsT], workflow.ConcreteArtifact[T, ArgsT]],
     Generic[ArgsT, S, T],
 ):
     step: workflow.Workflow[S, T]
 
-    def __call__(self, inp: ConcreteArtifact[S, ArgsT]) -> ConcreteArtifact[T, ArgsT]:
-        return ConcreteArtifact(data=self.step(inp.data), args=inp.args)
+    def __call__(
+        self, inp: workflow.ConcreteArtifact[S, ArgsT]
+    ) -> workflow.ConcreteArtifact[T, ArgsT]:
+        return workflow.ConcreteArtifact(data=self.step(inp.data), args=inp.args)
 
 
 @dataclasses.dataclass(frozen=True)
 class ArgsOnlyAdapter(
     workflow.ChainableWorkflowMixin,
     workflow.ReplaceEnabledWorkflowMixin,
-    workflow.Workflow[ConcreteArtifact[DefT, S], ConcreteArtifact[DefT, T]],
+    workflow.Workflow[workflow.ConcreteArtifact[DefT, S], workflow.ConcreteArtifact[DefT, T]],
     Generic[DefT, S, T],
 ):
     step: workflow.Workflow[S, T]
 
-    def __call__(self, inp: ConcreteArtifact[DefT, S]) -> ConcreteArtifact[DefT, T]:
-        return ConcreteArtifact(data=inp.data, args=self.step(inp.args))
+    def __call__(
+        self, inp: workflow.ConcreteArtifact[DefT, S]
+    ) -> workflow.ConcreteArtifact[DefT, T]:
+        return workflow.ConcreteArtifact(data=inp.data, args=self.step(inp.args))
 
 
 @dataclasses.dataclass(frozen=True)
 class StripArgsAdapter(
     workflow.ChainableWorkflowMixin,
     workflow.ReplaceEnabledWorkflowMixin,
-    workflow.Workflow[ConcreteArtifact[S, ArgsT], T],
+    workflow.Workflow[workflow.ConcreteArtifact[S, ArgsT], T],
     Generic[ArgsT, S, T],
 ):
     step: workflow.Workflow[S, T]
 
-    def __call__(self, inp: ConcreteArtifact[S, ArgsT]) -> T:
+    def __call__(self, inp: workflow.ConcreteArtifact[S, ArgsT]) -> T:
         return self.step(inp.data)

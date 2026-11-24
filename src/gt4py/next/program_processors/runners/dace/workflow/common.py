@@ -8,11 +8,12 @@
 
 import contextlib
 import os
-from typing import Any, Final, Generator, Optional
+from typing import Any, Final, Generator, Optional, TypeAlias
 
 import dace
 
 from gt4py._core import definitions as core_defs
+from gt4py.eve import xtyping
 from gt4py.next import config as gtx_config
 from gt4py.next.otf.compilation import common as gtx_compilation_common
 
@@ -31,6 +32,17 @@ SDFG_ARG_METRIC_COMPUTE_TIME: Final[str] = "gt_compute_time"
 
 SDFG_ARG_METRIC_COMPUTE_TIME_DTYPE: Final[dace.dtypes.typeclass] = dace.float64
 """DaCe datatype of `SDFG_ARG_METRIC_COMPUTE_TIME` argument."""
+
+
+ExternalWorkspace: TypeAlias = dict[
+    core_defs.DeviceType, xtyping.ArrayInterface | xtyping.CUDAArrayInterface
+]
+""" Mapping from device types to array-like objects.
+
+    The array-like objects must be accepted by `dace.dtypes.array_interface_ptr()`
+    as a workspace: a host array exposing `gt4py.eve.xtyping.ArrayInterface`
+    or a device array exposing `gt4py.eve.xtyping.CUDAArrayInterface`.
+"""
 
 
 def set_dace_config(
@@ -71,14 +83,10 @@ def set_dace_config(
     #   creating any further sub-folder to compile the SDFG.
     dace.Config.set("cache", value="single")
 
-    # Workaround to disable detection of the CUDA architecture in DaCe, and instead use the one provided by GT4Py.
-    # TODO(edopao): revisit this workaround once it is possible to disable GPU detection in DaCe.
-    # (see https://github.com/spcl/dace/pull/2424)
+    # Disable detection of the CUDA architecture in DaCe, and instead use the one provided by GT4Py.
     if device_arch := gtx_compilation_common.get_device_arch():
-        dace.Config.set(
-            "compiler.extra_cmake_args",
-            value=f"-DLOCAL_CUDA_ARCHITECTURES={device_arch}",
-        )
+        dace.Config.set("compiler.cuda.cuda_arch", value=device_arch)
+        dace.Config.set("compiler.cuda.hip_arch", value=device_arch)
 
     # Prevents the implicit change of Memlets to Maps. Instead they should be handled by
     #  `gt4py.next.program_processors.runners.dace.transfromations.gpu_utils.gt_gpu_transform_non_standard_memlet()`.
@@ -153,13 +161,23 @@ def set_dace_config(
         "progress", value=gtx_config.env_flag_to_bool("DACE_progress", default=gtx_config.DEBUG)
     )
 
-    # In debug mode use `development` otherwise use `production`.
-    # NOTE: In case you want to run with optimizations, but would like to have the full
-    #   DaCe folder, i.e. `development` mode, then export `DACE_compiler_build_folder_mode`
-    #   set to `development` (small case matters).
+    # Production-mode will only keep the compiled library and SDFG JSON-file.
     dace.Config.set(
-        "compiler", "build_folder_mode", value=("development" if gtx_config.DEBUG else "production")
+        "compiler.build_folder_mode",
+        value=("development" if gtx_config.KEEP_DACE_BUILD_FILES else "production"),
     )
+
+    # Do not lift implicit copies to `CopyLibraryNode` instances during code generation.
+    #  The lowering and the transformations of the conditional expressions (`if_`) that
+    #  GT4Py performs produce direct array-to-array copy edges, inside the branch states
+    #  of nested SDFGs, that memlet propagation marks as dynamic. The `CopyLibraryNode`
+    #  that the pass inserts for such an edge is expanded into a tasklet, whose dynamic
+    #  output write is then silently dropped by the CPU code generator (the write is
+    #  supposed to be emitted inline in the tasklet body, but the corresponding code
+    #  path calls `TargetCodeGenerator.ptr()` with an outdated signature, raising a
+    #  `TypeError` that is swallowed). Keeping the copies implicit makes the code
+    #  generator handle them through the array copy path instead, which is correct.
+    dace.Config.set("compiler.cpu.explicit_copy", value=False)
 
     # We are not interested in storing the history of SDFG transformations.
     dace.Config.set("store_history", value=False)

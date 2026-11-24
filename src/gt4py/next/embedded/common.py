@@ -12,8 +12,8 @@ import functools
 import itertools
 import operator
 from collections.abc import Iterator, Sequence
+from typing import Any, Optional, cast
 
-from gt4py.eve.extended_typing import Any, Optional, cast
 from gt4py.next import common
 from gt4py.next.embedded import exceptions as embedded_exceptions
 
@@ -103,7 +103,13 @@ def domain_intersection(*domains: common.Domain) -> common.Domain:
         ... )  # doctest: +ELLIPSIS
         Domain(dims=(Dimension(value='I', ...), ranges=(UnitRange(1, 3),))
     """
-    return functools.reduce(operator.and_, domains, common.Domain(dims=tuple(), ranges=tuple()))
+    if not domains:
+        return common.Domain()
+    first, *rest = domains
+    if all(d == first for d in rest):
+        common.check_dims(first.dims)
+        return first
+    return functools.reduce(operator.and_, domains)
 
 
 def restrict_to_intersection(

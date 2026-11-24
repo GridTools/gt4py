@@ -58,7 +58,7 @@ One argument against this option is the maintenance overhead of supporting both 
 From a technical point of view, this option can be implemented with an optional second argument of round function that GT4Py exposes, i.e.
 
 ```py
-def round(x, rounding_mode = ROUND_MODE_DEFAULT):
+def round(x, rounding_mode=ROUND_MODE_DEFAULT):
     """Computes the integer value nearest to `x` (in floating-point format), rounding halfway cases based on rounding_mode.
 
     This function finds the nearest integer value (in floating point format) to the given number `x`, e.g. `round(2.3) returns `2.0` since
@@ -84,6 +84,7 @@ class RoundingMode(enum.Enum):
     ROUND_AWAY_FROM_ZERO = enum.auto()
     ROUND_TO_EVEN = enum.auto()
 
+
 def _get_default_rounding_mode() -> RoundingMode:
     mode = os.environ.get("GT4PY_ROUND_MODE_DEFAULT", default="ROUND_TO_EVEN")
 
@@ -94,7 +95,10 @@ def _get_default_rounding_mode() -> RoundingMode:
         return RoundingMode.ROUND_TO_EVEN
 
     known = ["ROUND_AWAY_FROM_ZERO", "ROUND_TO_EVEN"]
-    raise ValueError(f"Unexpected rounding mode default '{mode}'. Expected one of {", ".join(known)}.")
+    raise ValueError(
+        f"Unexpected rounding mode default '{mode}'. Expected one of {', '.join(known)}."
+    )
+
 
 ROUND_MODE_DEFAULT: RoundingMode = _get_default_rounding_mode()
 ```

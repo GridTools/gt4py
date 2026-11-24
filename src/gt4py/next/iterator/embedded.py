@@ -16,25 +16,15 @@ import dataclasses
 import itertools
 import math
 import operator
-
-import numpy as np
-import numpy.typing as npt
-
-from gt4py import eve
-from gt4py._core import definitions as core_defs, types as core_types
-from gt4py.eve import extended_typing as xtyping
-from gt4py.eve.extended_typing import (
+import typing
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from typing import (
     Any,
-    Callable,
     Generic,
-    Iterable,
     Literal,
-    Mapping,
     NoReturn,
     Optional,
-    Protocol,
     Self,
-    Sequence,
     SupportsFloat,
     SupportsInt,
     TypeAlias,
@@ -43,8 +33,15 @@ from gt4py.eve.extended_typing import (
     Union,
     cast,
     overload,
-    runtime_checkable,
 )
+
+import numpy as np
+import numpy.typing as npt
+from typing_extensions import Protocol, runtime_checkable
+
+from gt4py import eve
+from gt4py._core import definitions as core_defs, types as core_types
+from gt4py.eve import xtyping
 from gt4py.next import common, field_utils, utils
 from gt4py.next.embedded import (
     context as embedded_context,
@@ -120,7 +117,7 @@ class StridedConnectivityField(common.Connectivity):
         object.__setattr__(self, "_max_neighbors", max_neighbors)
 
     @property
-    def __gt_origin__(self) -> xtyping.Never:
+    def __gt_origin__(self) -> typing.Never:
         raise NotImplementedError
 
     def __gt_type__(self) -> common.NeighborConnectivityType:
@@ -166,7 +163,7 @@ class StridedConnectivityField(common.Connectivity):
         index = item[0] * self._max_neighbors + item[1]  # type: ignore[operator]
         return ConstantField(index)
 
-    def as_scalar(self) -> xtyping.Never:
+    def as_scalar(self) -> typing.Never:
         raise NotImplementedError()
 
     def __call__(
@@ -178,9 +175,7 @@ class StridedConnectivityField(common.Connectivity):
 
     __getitem__ = restrict  # type: ignore[assignment]
 
-    def inverse_image(
-        self, image_range: common.UnitRange | common.NamedRange
-    ) -> Sequence[common.NamedRange]:
+    def _inverse_image(self, image_range: common.UnitRange) -> Sequence[common.NamedRange]:
         raise NotImplementedError
 
     @property
@@ -1704,7 +1699,7 @@ def if_stmt(cond: bool, true_branch: Callable[[], None], false_branch: Callable[
 def temporary(domain: runtime.CartesianDomain | runtime.UnstructuredDomain, dtype):
     type_ = runtime._dtypebuiltin_to_ts(dtype)
     new_domain = common.domain(domain)
-    tmp = field_utils.field_from_typespec(type_, new_domain, np)
+    tmp = field_utils.field_from_typespec(type_, new_domain)
     return tmp
 
 
@@ -1785,11 +1780,12 @@ def _fieldspec_list_to_value(
 @builtins.as_fieldop.register(EMBEDDED)
 def as_fieldop(fun: Callable, domain: runtime.CartesianDomain | runtime.UnstructuredDomain):
     def impl(*args):
-        xp = field_utils.get_array_ns(*args)
         type_ = _get_output_type(fun, domain, [promote_scalars(arg) for arg in args])
 
         new_domain, type_ = _fieldspec_list_to_value(common.domain(domain), type_)
-        out = field_utils.field_from_typespec(type_, new_domain, xp)
+        out = field_utils.field_from_typespec(
+            type_, new_domain, like=field_utils.first_buffer(*args)
+        )
 
         # TODO(havogt): after updating all tests to use the new program,
         # we should get rid of closure and move the implementation to this function

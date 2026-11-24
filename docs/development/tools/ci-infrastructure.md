@@ -8,7 +8,7 @@ The following workflows are currently active.
 
 ### Code Quality
 
-A `Code Quality` workflow runs `pre-commit` to check code quality requirements through tools like **mypy** or **ruff**. Code coverage workflows are currently disabled.
+A `Code Quality` workflow runs `pre-commit` to check code quality requirements through tools like **mypy** or **ruff**.
 
 ### Tests
 
@@ -18,9 +18,21 @@ The `Test code components (CPU)`, `Test Package Root` and `Test examples in docu
 
 The idea is to run test sessions only when needed. This means that a set of tests are only run when the associated sources or the sources of a dependency change. For example, `eve` tests will not be run when only GT4Py cartesian sources are changed. The criteria to trigger tests sessions is encoded in the custom [`nox-sessions-config`](../../../nox-sessions-config.yml) configuration file, which follows a similar structure of the GitHub Actions `paths` and `paths-ignore` filters. The [`/scripts/python/nox_sessions.py`](../../../scripts/python/nox_sessions.py) script reads this file to decide which nox sessions are required for the existing changes from a base commit.
 
+### Documentation
+
+A `Documentation` workflow builds the user documentation site with the `docs` nox session and deploys it to GitHub Pages when a release is published, or when run manually from `main` or from a tag. See [documentation.md](documentation.md) for details.
+
 ### Daily CI
 
-There is an extra CI workflow on GitHub scheduled to run daily and testing `main` with different sets of requirements: newest dependencies, lowest dependencies versions and lowest dependencies versions including extras. Failures are accessible in [GitHub web interface](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml) and as the 'Daily CI' badge in the main [README.md](../../../README.md) file. Additionally, in case of failure a message _might_ be posted in the [#ci-notifications](https://app.slack.com/client/T0A5HP547/C0E145U65) channel of the GridTols slack, but those notifications do not work reliably.
+There is an extra CI workflow on GitHub scheduled to run daily and testing `main` with different sets of requirements: the `highest` and the `lowest-direct` `uv` resolution strategies. Failures are accessible in [GitHub web interface](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml) and as the 'Daily CI' badge in the main [README.md](../../../README.md) file. Additionally, in case of failure a message _might_ be posted in the [#ci-notifications](https://app.slack.com/client/T0A5HP547/C0E145U65) channel of the GridTols slack, but those notifications do not work reliably.
+
+### AI-assisted PR review (PR Agent)
+
+A `PR Agent` workflow posts an advisory AI review on pull requests, using [PR Agent](https://github.com/The-PR-Agent/pr-agent) on the [CSCS inference service](https://docs.cscs.ch/services/inference/). It is a small caller of the reusable workflow in [GridTools/ci-workflows](https://github.com/GridTools/ci-workflows), pinned by commit SHA, which holds the pipeline; the key is in the `pr-agent` environment. It is never a required status check. Only `/review` runs automatically, for pull requests whose author has write access; users with write access can also invoke `/review`, `/improve`, `/ask` and `/describe` by commenting. See [pr-agent.md](pr-agent.md) for details.
+
+### Sandboxed agent review (Agent Review)
+
+An `Agent Review` workflow posts an advisory review written by a coding agent that can explore the repository, running inside the [AWF](https://github.com/github/gh-aw-firewall) sandbox, without network access, designed so that neither the inference key nor a write token is readable by the agent or by PR code. It is a small caller of the reusable workflow in [GridTools/ci-workflows](https://github.com/GridTools/ci-workflows), pinned by commit SHA, which holds the pipeline. It runs on a pull request when a user with write access adds the `agent-review` label, or by `workflow_dispatch`; it needs an Actions event policy for its workflow file that allows `pull_request_target` and `workflow_dispatch`, and a dedicated key in the `agent-review` environment. It is never a required status check. See [agent-review.md](agent-review.md) for details.
 
 ## CSCS-CI
 
@@ -30,17 +42,9 @@ Since all tests routinely run here, this might be a better match for reintroduci
 
 Additional information on how to change this process, such as adding whitelisted users, regenerating tokens etc can be found in [cscs-ci.md](cscs-ci.md)
 
-## Integration with external tools
-
-Workflows that integrate with external code quality services (i.e. codecov.io, SonarCloud) need special treatment for security reasons. Such workflows use a secret token to interact with the external services. Anyone having access to the secret token can read or write data to the external services and can thus "hack" it by publishing spoofed code coverage results, for example. To prevent the exposure of the secret tokens, GitHub allows repository owners to record secret tokens associated with the repository. These repository secrets can then be safely accessed from CI workflows.
-
-The repository secrets, however, are only available within the main repository, not its forks. Otherwise, someone could make a fork, create a pull request with a malicious workflow, and steal the secrets. As a side-effect, it's impossible to publish code coverage results from a workflow triggered by a pull request from a fork.
-
-To resolve this issue, the coverage workflows are triggered in the context of the main repository via the `workflow_run` trigger after the tests in the context of the fork have finished. The test workflows upload the coverage results as artifacts which are then downloaded in the subsequent workflow that publishes them to codecov.io. The test workflows also save the context such as run ID or PR number in an artifact, which is then forwarded by the subsequent workflow to the external tool.
-
 ## Tested operating systems
 
-The testing workflows already use a matrix strategy to run the automated tests on multiple operating systems. There is, however, a baseline 2000 hour monthly limit for the total time CI runs take. Since MacOS builds consume node hours 10 times as fast, this leaves an effective 200 hours for MacOS CI runs. This was already exhausted during testing of the workflows, thus MacOS was temporarily disabled in the configuration matrices, leaving only Ubuntu. It would be nice to further test the limits or pay for some more hours to restore MacOS builds.
+The testing workflows use a matrix strategy to run the automated tests on multiple operating systems. There is, however, a baseline 2000 hour monthly limit for the total time CI runs take. Since MacOS builds consume node hours 10 times as fast, this leaves an effective 200 hours for MacOS CI runs. MacOS is therefore only part of the Daily CI matrix, while the per-pull-request workflows run on Ubuntu only.
 
 ## Future improvements
 

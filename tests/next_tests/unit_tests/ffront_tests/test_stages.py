@@ -8,11 +8,18 @@
 
 from unittest import mock
 
+import pytest
+
 import gt4py.next as gtx
 from gt4py.next.ffront import stages
+from gt4py.next.type_system import type_specifications as ts
 
 
 IDim = gtx.Dimension("I")
+
+
+def _field_type(kind: ts.ScalarKind) -> ts.FieldType:
+    return ts.FieldType(dims=[IDim], dtype=ts.ScalarType(kind=kind))
 
 
 def _make_field_operator_definition(offset: int):
@@ -48,6 +55,28 @@ def test_fingerprinter_hashes_functions_by_source_and_closure():
     assert stages.fingerprinter(first) != stages.fingerprinter(different)
 
 
+def _make_annotated_definition(dtype, length):
+    def copy(
+        a: tuple[(gtx.Field[gtx.Dims[IDim], dtype],) * length],
+    ) -> tuple[(gtx.Field[gtx.Dims[IDim], dtype],) * length]:
+        return a
+
+    return copy
+
+
+def test_fingerprinter_hashes_functions_by_annotations():
+    first = _make_annotated_definition(gtx.float64, 1)
+    same = _make_annotated_definition(gtx.float64, 1)
+
+    assert stages.fingerprinter(first) == stages.fingerprinter(same)
+    assert stages.fingerprinter(first) != stages.fingerprinter(
+        _make_annotated_definition(gtx.float32, 1)
+    )
+    assert stages.fingerprinter(first) != stages.fingerprinter(
+        _make_annotated_definition(gtx.float64, 2)
+    )
+
+
 def test_fingerprinter_is_location_sensitive():
     # Two functions with byte-identical source and closure but different source
     # locations must fingerprint differently, otherwise a cached lowering would
@@ -71,6 +100,78 @@ def test_definition_stages_use_the_custom_fingerprinter():
     assert stages.fingerprinter(first_fieldop) != stages.fingerprinter(different_fieldop)
     assert stages.fingerprinter(first_program) == stages.fingerprinter(same_program)
     assert stages.fingerprinter(first_program) != stages.fingerprinter(different_program)
+
+
+def _make_copies_of_dtype(dtype):
+    @gtx.field_operator
+    def copy(a: gtx.Field[gtx.Dims[IDim], dtype]) -> gtx.Field[gtx.Dims[IDim], dtype]:
+        return a
+
+    @gtx.program
+    def copy_program(
+        a: gtx.Field[gtx.Dims[IDim], dtype], out: gtx.Field[gtx.Dims[IDim], dtype]
+    ) -> None:
+        copy(a, out=out)
+
+    return copy, copy_program
+
+
+def _make_copies_of_tuple_length(length):
+    @gtx.field_operator
+    def copy(
+        a: tuple[(gtx.Field[gtx.Dims[IDim], gtx.float64],) * length],
+    ) -> tuple[(gtx.Field[gtx.Dims[IDim], gtx.float64],) * length]:
+        return a
+
+    @gtx.program
+    def copy_program(
+        a: tuple[(gtx.Field[gtx.Dims[IDim], gtx.float64],) * length],
+        out: tuple[(gtx.Field[gtx.Dims[IDim], gtx.float64],) * length],
+    ) -> None:
+        copy(a, out=out)
+
+    return copy, copy_program
+
+
+@pytest.mark.parametrize(
+    "factory, variants",
+    [
+        (
+            _make_copies_of_dtype,
+            {
+                gtx.float64: _field_type(ts.ScalarKind.FLOAT64),
+                gtx.float32: _field_type(ts.ScalarKind.FLOAT32),
+            },
+        ),
+        (
+            _make_copies_of_tuple_length,
+            {
+                1: ts.TupleType(types=[_field_type(ts.ScalarKind.FLOAT64)]),
+                3: ts.TupleType(types=[_field_type(ts.ScalarKind.FLOAT64)] * 3),
+            },
+        ),
+    ],
+    ids=["dtype", "tuple_length"],
+)
+def test_definitions_differing_only_in_annotations_are_not_shared(factory, variants):
+    built = {variant: factory(variant) for variant in variants}
+
+    for variant, (copy, copy_program) in built.items():
+        assert (
+            copy.foast_stage.foast_node.definition.params[0].type,
+            copy_program.past_stage.past_node.params[0].type,
+        ) == (variants[variant], variants[variant])
+
+
+@pytest.mark.parametrize(
+    "factory, variant", [(_make_copies_of_dtype, gtx.float32), (_make_copies_of_tuple_length, 2)]
+)
+def test_identical_definitions_share_their_frontend_stages(factory, variant):
+    copy, copy_program = factory(variant)
+    same_copy, same_copy_program = factory(variant)
+
+    assert same_copy.foast_stage is copy.foast_stage
+    assert same_copy_program.past_stage is copy_program.past_stage
 
 
 def test_fingerprint_excludes_backend():

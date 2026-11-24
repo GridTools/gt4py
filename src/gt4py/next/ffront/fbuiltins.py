@@ -7,11 +7,9 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
-import functools
 import inspect
-import math
-import operator
 from builtins import bool, float, int, tuple  # noqa: A004 shadowing a Python built-in
+from types import UnionType
 from typing import (
     Any,
     Callable,
@@ -23,15 +21,17 @@ from typing import (
     TypeVar,
     Union,
     cast,
+    get_args,
+    get_origin,
     overload,
 )
 
-import numpy as np
 from numpy import float32, float64, int8, int16, int32, int64, uint8, uint16, uint32, uint64
 
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, named_collections
 from gt4py.next.common import Dimension, Field  # noqa: F401 [unused-import] for TYPE_BUILTINS
+from gt4py.next.embedded import array_ops, context as embedded_context
 from gt4py.next.iterator import runtime
 from gt4py.next.type_system import type_specifications as ts
 
@@ -138,12 +138,15 @@ def _type_conversion_helper(t: type) -> type[ts.TypeSpec] | tuple[type[ts.TypeSp
         return (
             ts.ConstructorType
         )  # our type of type is currently represented by the type constructor function
-    elif t is Tuple or (hasattr(t, "__origin__") and t.__origin__ is tuple):
+    elif t is tuple or get_origin(t) is tuple:
         return ts.TupleType
-    elif hasattr(t, "__origin__") and t.__origin__ is Union:
-        types = [_type_conversion_helper(e) for e in t.__args__]  # type: ignore[attr-defined]
-        assert all(type(t) is type and issubclass(t, ts.TypeSpec) for t in types)
-        return cast(tuple[type[ts.TypeSpec], ...], tuple(types))  # `cast` to break the recursion
+    # 'Union[A, B]' and 'A | B' are different runtime objects: the latter is a
+    # 'types.UnionType', which carries no '__origin__' at all.
+    elif get_origin(t) in (Union, UnionType):
+        member_types = [_type_conversion_helper(e) for e in get_args(t)]
+        assert all(type(m) is type and issubclass(m, ts.TypeSpec) for m in member_types)
+        # `cast` to break the recursion
+        return cast(tuple[type[ts.TypeSpec], ...], tuple(member_types))
     elif t in named_collections.CUSTOM_NAMED_COLLECTION_TYPES:
         return ts.NamedCollectionType
     else:
@@ -237,6 +240,16 @@ class WhereBuiltinFunction(
     ) -> Tuple: ...
 
     def __call__(self, cond: CondT, true_field: FieldT1, false_field: FieldT2) -> _R:  # type: ignore[misc] # supposedly this signature does not accept all the possible args allowed by the overloads ??
+        if isinstance(true_field, named_collections.CUSTOM_NAMED_COLLECTION_TYPES) or isinstance(
+            false_field, named_collections.CUSTOM_NAMED_COLLECTION_TYPES
+        ):
+            if type(true_field) is not type(false_field):
+                raise ValueError(
+                    f"Either both or none can be a named collection of the same type in '{true_field=}' and '{false_field=}'."
+                )
+            return named_collections.tree_map_named_collection(lambda t, f: self(cond, t, f))(  # type: ignore[return-value] # `NamedCollection` is not `_R`
+                true_field, false_field
+            )
         if isinstance(true_field, tuple) or isinstance(false_field, tuple):
             if not (isinstance(true_field, tuple) and isinstance(false_field, tuple)):
                 raise ValueError(
@@ -270,7 +283,7 @@ def min_over(field: common.Field, /, axis: common.Dimension) -> common.Field:
 def broadcast(
     field: common.Field | core_defs.ScalarT, dims: tuple[common.Dimension, ...], /
 ) -> common.Field:
-    assert core_defs.is_scalar_type(
+    assert array_ops.is_scalar_like(
         field
     )  # default implementation for scalars, Fields are handled via dispatch
     # TODO(havogt) implement with FunctionField, the workaround is to ignore broadcasting on scalars as they broadcast automatically, but we lose the check for compatible dimensions
@@ -306,69 +319,46 @@ def astype(
     if isinstance(value, tuple):
         return tuple(astype(v, type_) for v in value)
     # default implementation for scalars, Fields are handled via dispatch
-    assert core_defs.is_scalar_type(value)
-    return core_defs.dtype(type_).scalar_type(value)
+    assert array_ops.is_scalar_like(value)
+    if core_defs.is_scalar_type(value):
+        return core_defs.dtype(type_).scalar_type(value)
+    ops = array_ops.of(value)
+    return ops.xp.astype(value, ops.dtype(type_))
 
 
-_UNARY_MATH_NUMBER_BUILTIN_IMPL: Final = {"abs": abs, "neg": operator.neg}
-UNARY_MATH_NUMBER_BUILTIN_NAMES: Final = [*_UNARY_MATH_NUMBER_BUILTIN_IMPL.keys()]
-
-
-try:
-    from scipy.special import gamma as _gamma  # dtype-preserving ufunc
-except ImportError:
-
-    def _gamma(value: core_defs.ScalarT) -> core_defs.ScalarT:
-        # restore the input scalar type, which `math.gamma` widens to `float`
-        return cast(core_defs.ScalarT, type(value)(math.gamma(value)))
-
-
-_UNARY_MATH_FP_BUILTIN_IMPL: Final = {
-    "sin": np.sin,
-    "cos": np.cos,
-    "tan": np.tan,
-    "arcsin": np.arcsin,
-    "arccos": np.arccos,
-    "arctan": np.arctan,
-    "sinh": np.sinh,
-    "cosh": np.cosh,
-    "tanh": np.tanh,
-    "arcsinh": np.arcsinh,
-    "arccosh": np.arccosh,
-    "arctanh": np.arctanh,
-    "sqrt": np.sqrt,
-    "exp": np.exp,
-    "log": np.log,
-    "gamma": _gamma,
-    "cbrt": np.cbrt,
-    "floor": np.floor,
-    "ceil": np.ceil,
-    "trunc": np.trunc,
-}
-UNARY_MATH_FP_BUILTIN_NAMES: Final = [*_UNARY_MATH_FP_BUILTIN_IMPL.keys()]
-
-_UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL: Final = {
-    "isfinite": np.isfinite,
-    "isinf": np.isinf,
-    "isnan": np.isnan,
-}
-UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES: Final = [*_UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL.keys()]
+UNARY_MATH_NUMBER_BUILTIN_NAMES: Final = ["abs", "neg"]
+UNARY_MATH_FP_BUILTIN_NAMES: Final = [
+    "sin",
+    "cos",
+    "tan",
+    "arcsin",
+    "arccos",
+    "arctan",
+    "sinh",
+    "cosh",
+    "tanh",
+    "arcsinh",
+    "arccosh",
+    "arctanh",
+    "sqrt",
+    "exp",
+    "log",
+    "gamma",
+    "cbrt",
+    "floor",
+    "ceil",
+    "trunc",
+]
+UNARY_MATH_FP_PREDICATE_BUILTIN_NAMES: Final = ["isfinite", "isinf", "isnan"]
 
 
 def _make_unary_math_builtin(name: str) -> BuiltInFunction:
-    _math_builtin = (
-        _UNARY_MATH_NUMBER_BUILTIN_IMPL
-        | _UNARY_MATH_FP_BUILTIN_IMPL
-        | _UNARY_MATH_FP_PREDICATE_BUILTIN_IMPL
-    )[name]
-
     def impl(value: common.Field | core_defs.ScalarT, /) -> common.Field | core_defs.ScalarT:
         # TODO(havogt): enable tests in `test_math_builtin_execution.py`
-        assert core_defs.is_scalar_type(
-            value
-        )  # default implementation for scalars, Fields are handled via dispatch
-
-        return cast(common.Field | core_defs.ScalarT, _math_builtin(value))
+        # default implementation for scalars, Fields are handled via dispatch
+        assert array_ops.is_scalar_like(value)
+        ops = array_ops.default() if core_defs.is_scalar_type(value) else array_ops.of(value)
+        return ops.elementwise_function(name)(value)
 
     impl.__name__ = name
     return BuiltInFunction(impl)
@@ -409,9 +399,12 @@ def _make_binary_math_builtin(name: str) -> BuiltInFunction:
         lhs: common.Field | core_defs.ScalarT, rhs: common.Field | core_defs.ScalarT, /
     ) -> common.Field | core_defs.ScalarT:
         # default implementation for scalars, Fields are handled via dispatch
-        assert core_defs.is_scalar_type(lhs)
-        assert core_defs.is_scalar_type(rhs)
-        return getattr(np, name)(lhs, rhs)
+        assert array_ops.is_scalar_like(lhs) and array_ops.is_scalar_like(rhs)
+        if core_defs.is_scalar_type(lhs) and core_defs.is_scalar_type(rhs):
+            return array_ops.default().elementwise_function(name)(lhs, rhs)
+        array = cast(core_defs.NDArrayObject, rhs if core_defs.is_scalar_type(lhs) else lhs)
+        ops = array_ops.of(array)
+        return ops.elementwise_function(name)(ops.operand(lhs, array), ops.operand(rhs, array))
 
     impl.__name__ = name
     return BuiltInFunction(impl)
@@ -464,26 +457,22 @@ assert (diff := actual_export - should_export) == set(), (
 #  guidelines for decision.
 @dataclasses.dataclass(frozen=True)
 class FieldOffset(runtime.Offset):
+    #: The tag, i.e. the offset-provider key.
+    value: str
     source: common.Dimension
     target: tuple[common.Dimension] | tuple[common.Dimension, common.Dimension]
-
-    @functools.cached_property
-    def _cache(self) -> dict:
-        return {}
 
     def __post_init__(self) -> None:
         if len(self.target) == 2 and self.target[1].kind != common.DimensionKind.LOCAL:
             raise ValueError("Second dimension in offset must be a local dimension.")
 
     def __gt_type__(self) -> ts.OffsetType:
-        return ts.OffsetType(source=self.source, target=self.target)
+        return ts.OffsetType(source=self.source, target=self.target, tag=self.value)
 
     def __getitem__(self, offset: int) -> common.Connectivity:
         """Serve as a connectivity factory."""
-        from gt4py.next import embedded  # avoid circular import
-
         assert isinstance(self.value, str)
-        current_offset_provider = embedded.context.get_offset_provider(None)
+        current_offset_provider = embedded_context.get_offset_provider(None)
         assert current_offset_provider is not None
         offset_definition = common.get_offset(current_offset_provider, self.value)
 
@@ -495,23 +484,15 @@ class FieldOffset(runtime.Offset):
 
     def as_connectivity_field(self) -> common.Connectivity:
         """Convert to connectivity field using the offset providers in current embedded execution context."""
-        from gt4py.next import embedded  # avoid circular import
-
         assert isinstance(self.value, str)
-        current_offset_provider = embedded.context.get_offset_provider(None)
+        current_offset_provider = embedded_context.get_offset_provider(None)
         assert current_offset_provider is not None
         offset_definition = common.get_offset(current_offset_provider, self.value)
 
-        cache_key = id(offset_definition)
-        if (connectivity := self._cache.get(cache_key, None)) is None:
-            if isinstance(offset_definition, common.Connectivity):
-                connectivity = offset_definition
-            else:
-                raise NotImplementedError()
+        if not isinstance(offset_definition, common.Connectivity):
+            raise NotImplementedError()
 
-            self._cache[cache_key] = connectivity
-
-        return connectivity
+        return offset_definition
 
 
 def is_cartesian_offset(offset: FieldOffset | ts.OffsetType) -> bool:

@@ -16,6 +16,8 @@ from gt4py.next import common
 from gt4py.next.embedded import context as embedded_context
 from gt4py.next.iterator import embedded
 
+from next_tests.unit_tests.conftest import strict_array_on_device1
+
 
 def test_column_ufunc():
     def test_func():
@@ -151,3 +153,51 @@ def test_lift_accepts_cartesian_dimension_offset():
     K = common.Dimension("K", kind=common.DimensionKind.VERTICAL)
     lifted = embedded.lift(lambda *args: 0)()
     lifted.shift(common.CartesianConnectivity(K), 1)  # must not raise
+
+
+@pytest.mark.parametrize(
+    "make_array",
+    [
+        pytest.param(lambda: np.arange(3.0), id="numpy"),
+        pytest.param(
+            lambda: strict_array_on_device1(np.arange(3.0)), id="array_api_strict-device1"
+        ),
+    ],
+)
+def test_as_fieldop_result_in_namespace_and_on_device_of_inputs(make_array):
+    import array_api_compat
+
+    from gt4py.next.iterator import builtins, runtime
+
+    I = common.Dimension("I")
+    data = make_array()
+    inp = common._field(data, domain=common.domain({I: 3}))
+
+    with embedded_context.update(offset_provider={}):
+        result = builtins.as_fieldop(builtins.deref, runtime.CartesianDomain({I: range(3)}))(inp)
+
+    assert array_api_compat.array_namespace(result.ndarray) is array_api_compat.array_namespace(
+        data
+    )
+    assert array_api_compat.device(result.ndarray) == array_api_compat.device(data)
+    np.testing.assert_array_equal(result.asnumpy(), [0.0, 1.0, 2.0])
+
+
+@pytest.mark.requires_torch
+@pytest.mark.requires_torch_cuda
+@pytest.mark.requires_gpu
+def test_as_fieldop_result_on_device_of_inputs():
+    import torch
+
+    from gt4py.next.iterator import builtins, runtime
+
+    I = common.Dimension("I")
+    inp = common._field(
+        torch.arange(3.0, dtype=torch.float64, device="cuda"), domain=common.domain({I: 3})
+    )
+
+    with embedded_context.update(offset_provider={}):
+        result = builtins.as_fieldop(builtins.deref, runtime.CartesianDomain({I: range(3)}))(inp)
+
+    assert result.ndarray.device.type == "cuda"
+    np.testing.assert_array_equal(result.asnumpy(), [0.0, 1.0, 2.0])

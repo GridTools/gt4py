@@ -16,6 +16,7 @@ import collections
 import inspect
 import numbers
 import types
+from enum import IntEnum
 from typing import Callable, Dict, Type, Union
 
 import numpy as np
@@ -128,7 +129,7 @@ _VALID_DATA_TYPES = (
 )
 
 
-def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[Type, Type]):
+def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[str, Type]):
     def _parse_annotation(arg, annotation):
         # This function evaluates the type hint 'annotation' for the stencil argument 'arg'.
         # Note that 'typing.get_type_hints()' cannot be used here since field
@@ -157,6 +158,14 @@ def _set_arg_dtypes(definition: Callable[..., None], dtypes: Dict[Type, Type]):
     for key, value in annotations.items():
         annotations[key] = _parse_annotation(key, value)
     return original_annotations
+
+
+def enum(class_: type[IntEnum]):
+    """Mark an IntEnum derived class as readable for GT4Py."""
+    from gt4py.cartesian.frontend import gtscript_frontend as gt_frontend
+
+    gt_frontend.GTScriptParser.register_enum(class_)
+    return class_
 
 
 def function(func: Callable) -> Callable:

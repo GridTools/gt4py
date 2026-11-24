@@ -56,6 +56,9 @@ The following rules especially affects transformations and how they operate:
 Global memory has to adhere to the same rules as transient memory.
 However, the following rule takes precedence, i.e. if this rule is fulfilled then rules 6 to 10 may be violated.
 
+This is a permission for the program and therefore a restriction for a transformation: whatever rules 6 to 10 guarantee for a transient may not be assumed for global memory.
+In particular a global array may be written by more than one access node downstream of a write, which rule 6 rules out for a transient, so a transformation that needs to know that nothing else writes a range of global memory has to establish that itself.
+
 3. The same global memory is allowed to be used as input and output at the same time, either in the SDFG or in a state, if and only if the output depends _elementwise_ on the input.
 
    - \[Rationale 1\]: This allows the removal of double buffering, that DaCe may not remove. See also rule 2.

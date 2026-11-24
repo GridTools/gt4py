@@ -1,0 +1,63 @@
+name: PR Agent
+
+# Advisory AI review of pull requests by PR Agent; never a required status
+# check. The pipeline (authorization, model chain, the pinned PR Agent image,
+# the failure comment) is the reusable workflow in GridTools/ci-workflows,
+# where its security invariants are documented and reviewed. This file only
+# chooses when it runs, grants its permissions, maps the key and sets the
+# GT4Py configuration; the review policy is '.pr_agent.toml'.
+# See docs/development/tools/pr-agent.md.
+
+on:
+  # Not 'pull_request': fork pull requests get no secrets there.
+  #
+  # Both events read this file from 'main'. The Actions event policy "Allow
+  # PR Agent events" is scoped to this path and allows exactly these two
+  # events: keep the path, and add any new trigger to the policy too.
+  pull_request_target:
+    types: [opened, reopened, ready_for_review]
+  issue_comment:
+    types: [created]
+
+# Each called job widens what it needs, within the calling job's ceiling.
+permissions: {}
+
+# No cancelling: a run joins its group when queued, before the job 'if' is
+# evaluated, so any comment on a PR would cancel its in-flight review. Comment
+# runs are keyed on the comment id so a later comment cannot evict a queued one.
+concurrency:
+  group: pr-agent-${{ github.event_name }}-${{ github.event.comment.id || github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  pr-agent:
+    # No 'if': the structural filters (bots, drafts, comments that do not
+    # start with '/' or are not on a PR) are in the called workflow's first
+    # job, which also checks the author's or commenter's write access.
+    #
+    # Pinned by full commit SHA; bump it only to a reviewed release of
+    # GridTools/ci-workflows, after reading its release notes.
+    uses: GridTools/ci-workflows/.github/workflows/pr-agent.yml@fce720199ea669941f688b41dff6857e97faa401 # v0.1.0
+    # The ceiling for every job of the called workflow, checked at startup:
+    # exactly the union of what its jobs request. No 'contents: write'.
+    permissions:
+      contents: read
+      issues: write
+      pull-requests: write
+    with:
+      # Validated centrally; empty limits mean the defaults. Only these may
+      # come from variables. No 'api_base' (the default is the only allowed
+      # endpoint) and no 'environment' (the default, 'pr-agent'): those
+      # decide where the key goes, so never take them from a variable.
+      model: ${{ vars.PR_AGENT_MODEL }}
+      fallback_models: ${{ vars.PR_AGENT_FALLBACK_MODELS }}
+      token_budget: ${{ vars.PR_AGENT_TOKEN_BUDGET }}
+      max_output_tokens: ${{ vars.PR_AGENT_MAX_OUTPUT_TOKENS }}
+      ai_timeout: ${{ vars.PR_AGENT_AI_TIMEOUT }}
+      docs_url: https://github.com/GridTools/gt4py/blob/main/docs/development/tools/pr-agent.md
+    # Explicit mapping, resolved only in the called job that uses the
+    # 'pr-agent' environment (restricted to 'main'); a calling job cannot
+    # declare 'environment:' itself. Never 'secrets: inherit', and never a
+    # repository secret: the called workflow refuses one.
+    secrets:
+      inference_api_key: ${{ secrets.PR_AGENT_INFERENCE_API_KEY }}
