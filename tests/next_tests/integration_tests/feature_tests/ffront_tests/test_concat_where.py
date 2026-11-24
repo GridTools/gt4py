@@ -208,6 +208,34 @@ def test_boundary_single_layer_2d_bc(cartesian_case, static_domains: bool):
     )
 
 
+def test_boundary_single_layer_2d_bc_consumed(cartesian_case, static_domains: bool):
+    """
+    A lower-dimensional field supplies a single level of a `concat_where`, whose result is
+    then consumed by a further operation.
+
+    `boundary` has no `KDim`, i.e. it has a lower rank than the `concat_where` expression.
+    Unlike in `test_boundary_single_layer_2d_bc` the result is not written directly to the
+    output, which, with statically known domain bounds, makes the DaCe backend replace the
+    `concat_where` by direct accesses to `boundary` and `interior`.
+    """
+
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(
+        factor: cases.IJKField, interior: cases.IJKField, boundary: cases.IJField
+    ) -> cases.IJKField:
+        return factor * concat_where(KDim == 0, boundary, interior)
+
+    k = np.arange(0, cartesian_case.default_sizes[KDim])
+    cases.verify_with_default_data(
+        cartesian_case,
+        testee,
+        lambda factor, interior, boundary: (
+            factor
+            * np.where(k[np.newaxis, np.newaxis, :] == 0, boundary[:, :, np.newaxis], interior)
+        ),
+    )
+
+
 def test_boundary_single_layer_2d_bc_on_empty_branch(cartesian_case, static_domains: bool):
     @gtx.field_operator(static_domains=static_domains)
     def testee(interior: cases.IJKField, boundary: cases.IJField) -> cases.IJKField:

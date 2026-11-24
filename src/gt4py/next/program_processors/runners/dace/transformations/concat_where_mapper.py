@@ -1006,6 +1006,54 @@ def _map_data_into_nested_scopes_impl(
             already_mapped_data[producer_spec.data_name] = data_source
 
 
+def _map_producer_dims_to_node_dims(
+    prod_subset: dace_sbs.Range,
+    prod_offsets: dace_sbs.Range,
+) -> list[Optional[int]]:
+    """Relates the dimensions of a producer to the dimensions of the `concat_where` node.
+
+    `_ProducerSpec.offset` is the range that is read from the producer and is thus
+    expressed in the dimensions of the producer, while `_ProducerSpec.subset` is the
+    range that is written into the `concat_where` node and is expressed in the
+    dimensions of the node. Usually both have the same rank and their dimensions
+    correspond one to one. However, the producer might have a lower rank than the
+    node, for example a field without vertical dimension that supplies a single
+    level of a `concat_where` expression over `Cell` and `K`.
+
+    In that case the dimensions are related in the same way as DaCe relates the two
+    sides of a copy between subsets of different rank: the dimensions whose size is
+    not one correspond in order. The dimensions of size one do not have to be related,
+    because only a single element is accessed along them.
+
+    Args:
+        prod_subset: The range that is written into the `concat_where` node.
+        prod_offsets: The range that is read from the producer.
+
+    Returns:
+        A `list` with one entry for every dimension of the producer. The entry is
+        either the corresponding dimension of the `concat_where` node or `None` if
+        only a single element is read from the producer along that dimension.
+
+    Raises:
+        NotImplementedError: If the dimensions can not be related.
+    """
+    if prod_offsets.dims() == prod_subset.dims():
+        return list(range(prod_offsets.dims()))
+
+    node_dims = [dim for dim, size in enumerate(prod_subset.size()) if size != 1]
+    prod_dims = [dim for dim, size in enumerate(prod_offsets.size()) if size != 1]
+    if len(node_dims) != len(prod_dims):
+        raise NotImplementedError(
+            f"Can not relate the range '{prod_offsets}' that is read from a producer to"
+            f" the range '{prod_subset}' of the 'concat_where' node it is written into."
+        )
+
+    prod_to_node_dims: list[Optional[int]] = [None] * prod_offsets.dims()
+    for prod_dim, node_dim in zip(prod_dims, node_dims, strict=True):
+        prod_to_node_dims[prod_dim] = node_dim
+    return prod_to_node_dims
+
+
 def _replace_single_read(
     sdfg: dace.SDFG,
     state: dace.SDFGState,
@@ -1056,20 +1104,34 @@ def _replace_single_read(
         prod_subset = producer_spec.subset
         prod_offsets = producer_spec.offset
 
+        # The selection condition is expressed in the dimensions of the `concat_where`
+        #  node, as is the consumer access.
         this_select_cond: list[str] = []
-        this_prod_access: list[str] = []
         for dim in range(consumed_subset.dims()):
             consumer_access = consumed_subset[dim][0]
             prod_supply_start = prod_subset[dim][0]
             prod_supply_end = prod_subset[dim][1]  # Inclusive end.
-            prod_offset = prod_offsets[dim][0]
-
             this_select_cond.append(
                 f"((({prod_supply_start}) <= ({consumer_access})) and (({consumer_access}) <= ({prod_supply_end})))"
             )
-            this_prod_access.append(
-                f"(({prod_offset}) + (({consumer_access}) - ({prod_supply_start})))"
-            )
+
+        # The access to the producer is expressed in the dimensions of the producer,
+        #  which might have a lower rank than the node, e.g. a field without vertical
+        #  dimension that supplies a single level.
+        this_prod_access: list[str] = []
+        for prod_dim, node_dim in enumerate(
+            _map_producer_dims_to_node_dims(prod_subset=prod_subset, prod_offsets=prod_offsets)
+        ):
+            prod_offset = prod_offsets[prod_dim][0]
+            if node_dim is None:
+                # Only a single element is read along this dimension of the producer.
+                this_prod_access.append(f"({prod_offset})")
+            else:
+                consumer_access = consumed_subset[node_dim][0]
+                prod_supply_start = prod_subset[node_dim][0]
+                this_prod_access.append(
+                    f"(({prod_offset}) + (({consumer_access}) - ({prod_supply_start})))"
+                )
         prod_accesses.append(", ".join(this_prod_access))
         select_conds.append(" and ".join(this_select_cond))
 
