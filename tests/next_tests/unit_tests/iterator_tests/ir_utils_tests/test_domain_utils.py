@@ -6,12 +6,16 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import itertools
+
 import pytest
 import numpy as np
 from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import domain_utils, ir_makers as im
+from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
+from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next import common, constructors
 
 I = common.Dimension("I")
@@ -165,6 +169,132 @@ def test_domain_union_then_intersection():
     # intersection of the union `{I: (0, 15), J: (0, 10)}` with `domain2`
     expected = im.domain(common.GridType.CARTESIAN, {I: (3, 7), J: (4, 10)})
     assert result.as_expr() == expected
+
+
+def _symbolic_domain(start, stop) -> domain_utils.SymbolicDomain:
+    return domain_utils.SymbolicDomain(
+        grid_type=common.GridType.CARTESIAN,
+        ranges={I: domain_utils.SymbolicRange(im.ensure_expr(start), im.ensure_expr(stop))},
+    )
+
+
+def _evaluate_range(domain: domain_utils.SymbolicDomain, **symbols: int) -> tuple[int, int]:
+    """Evaluate the bounds of a symbolic one-dimensional domain for concrete symbol values."""
+
+    def evaluate(expr: itir.Expr) -> int:
+        result = ConstantFolding.apply(InlineLambdas.apply(im.let(*symbols.items())(expr)))
+        assert isinstance(result, itir.Literal)
+        return int(result.value)
+
+    return evaluate(domain.ranges[I].start), evaluate(domain.ranges[I].stop)
+
+
+def _not_selected_regions(domain: domain_utils.SymbolicDomain, c: itir.Expr | str):
+    """The two regions of `domain` where `concat_where(I == c, a, b)` selects `b`."""
+    return (
+        domain_utils.domain_intersection(
+            domain, _symbolic_domain(itir.InfinityLiteral.NEGATIVE, c)
+        ),
+        domain_utils.domain_intersection(
+            domain, _symbolic_domain(im.plus(c, 1), itir.InfinityLiteral.POSITIVE)
+        ),
+    )
+
+
+def test_domain_intersection_symbolic():
+    # `[0, n[ & [c, inf[` is empty for `c >= n`, which is only known at runtime. The bounds of the
+    # intersection are the same as for a non-empty intersection.
+    result = domain_utils.domain_intersection(
+        _symbolic_domain(0, "n"), _symbolic_domain("c", itir.InfinityLiteral.POSITIVE)
+    )
+    assert result == _symbolic_domain(im.maximum("c", 0), "n")
+    assert _evaluate_range(result, n=10, c=3) == (3, 10)
+    for c in (10, 11):
+        start, stop = _evaluate_range(result, n=10, c=c)
+        assert start >= stop
+
+
+@pytest.mark.parametrize("c", [-1, 0, 1, 5, 8, 9, 10])
+def test_domain_union_symbolic_empty_at_runtime(c: int):
+    # The two regions `[0, n[ & ]-inf, c[` and `[0, n[ & [c + 1, inf[`. If `c` is the first or the
+    # last index, one of them is empty, but this is only known at runtime. The empty region must
+    # not contribute to the convex hull, which would otherwise contain `c` (#2205).
+    n = 10
+    regions = _not_selected_regions(_symbolic_domain(0, "n"), "c")
+    non_empty_regions = [
+        (start, stop) for start, stop in [(0, min(n, c)), (max(0, c + 1), n)] if start < stop
+    ]
+    expected = (
+        min(start for start, _ in non_empty_regions),
+        max(stop for _, stop in non_empty_regions),
+    )
+
+    for testee in [regions, regions[::-1]]:
+        result = domain_utils.domain_union(*testee)
+        assert _evaluate_range(result, n=n, c=c) == expected
+
+
+def test_domain_union_symbolic_all_empty_at_runtime():
+    # for `n = 1` and `c = 0` both regions are empty, so is their union
+    result = domain_utils.domain_union(*_not_selected_regions(_symbolic_domain(0, "n"), "c"))
+    start, stop = _evaluate_range(result, n=1, c=0)
+    assert start >= stop
+
+
+def test_domain_union_symbolic_translations_empty_at_runtime():
+    # `concat_where(I == c, a, b)` with `b` accessed with the shifts `-1` and `1`: the
+    # translations of each region are empty at the same time.
+    regions = _not_selected_regions(_symbolic_domain(0, "n"), "c")
+    result = domain_utils.domain_union(
+        *(
+            domain_utils.SymbolicDomain(
+                grid_type=common.GridType.CARTESIAN, ranges={I: region.ranges[I].translate(d)}
+            )
+            for region in regions
+            for d in (-1, 1)
+        )
+    )
+    assert _evaluate_range(result, n=10, c=0) == (0, 11)
+    assert _evaluate_range(result, n=10, c=5) == (-1, 11)
+    assert _evaluate_range(result, n=10, c=9) == (-1, 10)
+
+
+def test_domain_union_symbolic_nested_empty_at_runtime():
+    # Regions where `concat_where(I == c1, a, concat_where(I == c2, a, b))` selects `b`, accessed
+    # with the shifts `-1` and `1`, compared to the convex hull of the accessed points.
+    regions = [
+        inner_region
+        for outer_region in _not_selected_regions(_symbolic_domain(0, "n"), "c1")
+        for inner_region in _not_selected_regions(outer_region, "c2")
+    ]
+    accessed = domain_utils.domain_union(
+        *(
+            domain_utils.SymbolicDomain(
+                grid_type=common.GridType.CARTESIAN, ranges={I: region.ranges[I].translate(d)}
+            )
+            for region in regions
+            for d in (-1, 1)
+        )
+    )
+
+    for n, c1, c2 in itertools.product(range(1, 5), range(-1, 6), range(-1, 6)):
+        points = [i + d for i in range(n) if i not in (c1, c2) for d in (-1, 1)]
+        start, stop = _evaluate_range(accessed, n=n, c1=c1, c2=c2)
+        if points:
+            assert (start, stop) == (min(points), max(points) + 1)
+        else:
+            # nothing is accessed: the result is not required to be empty, but must not exceed
+            # the convex hull computed without taking emptiness into account
+            assert start >= stop or (-1 <= start and stop <= n + 1)
+
+
+def test_domain_union_symbolic_non_empty():
+    # Ranges that are not the result of an intersection are assumed to be non-empty: their union
+    # is the convex hull without any runtime check.
+    result = domain_utils.domain_union(
+        _symbolic_domain(0, "n"), _symbolic_domain(1, im.plus("n", 1))
+    )
+    assert result.as_expr() == im.domain(common.GridType.CARTESIAN, {I: (0, im.plus("n", 1))})
 
 
 @pytest.mark.parametrize(

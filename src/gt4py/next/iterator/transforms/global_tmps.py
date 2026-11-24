@@ -285,7 +285,11 @@ def _transform_stmt(
         ),
         # extract if_ call to the top-level
         functools.partial(
-            _transform_by_pattern, predicate=lambda expr, _: cpm.is_call_to(expr, "if_")
+            _transform_by_pattern,
+            # note: scalar `if_` calls, e.g. in the bounds of a domain, are not extracted
+            predicate=lambda expr, _: (
+                cpm.is_call_to(expr, "if_") and not isinstance(expr.type, ts.ScalarType)
+            ),
         ),
     ]
 

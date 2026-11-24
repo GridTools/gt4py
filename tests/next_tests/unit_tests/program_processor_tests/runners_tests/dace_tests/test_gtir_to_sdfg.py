@@ -2191,6 +2191,64 @@ def test_gtir_concat_where():
         np.allclose(c, ref)
 
 
+@pytest.mark.parametrize(
+    "boundary_indices, shifts",
+    [((0,), (-1,)), ((im.minus("size", 1),), (1,)), ((0, im.minus("size", 1)), (-1, 1))],
+)
+def test_gtir_concat_where_shifted_branch_no_out_of_bounds_read(boundary_indices, shifts):
+    # `concat_where(IDim == 0, x, concat_where(IDim == size - 1, x, x(IDim - 1) + x(IDim + 1)))`
+    # with `x` of size `size`: the shifted branch must only be computed where it is selected, as it
+    # reads outside of `x` on the boundary indices. Whether a boundary index is the first or the
+    # last index is only known at runtime. The SDFG is only lowered, not compiled.
+    stencil = im.lambda_("a")(
+        functools.reduce(im.plus, [im.deref(im.shift(IOff, s)("a")) for s in shifts])
+    )
+    expr = im.as_fieldop(stencil)("x")
+    for index in reversed(boundary_indices):
+        expr = im.concat_where(
+            im.domain(gtx_common.GridType.CARTESIAN, {IDim: (index, im.plus(index, 1))}), "x", expr
+        )
+    testee = gtir.Program(
+        id="gtir_concat_where_shifted_branch_no_out_of_bounds_read",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=expr,
+                domain=im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, "size")}),
+                target=gtir.SymRef(id="y"),
+            )
+        ],
+    )
+    # the transformations applied by the dace backend before lowering, including domain inference
+    testee = pass_manager.apply_fieldview_transforms(testee, offset_provider=CARTESIAN_OFFSETS)
+
+    sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS, skip_domain_inference=True)
+
+    # the subsets of `x` read by the maps, i.e., the memlets propagated to the map entries
+    read_subsets = [
+        edge.data.subset
+        for state in sdfg.states()
+        for node in state.nodes()
+        if isinstance(node, dace.nodes.MapEntry)
+        for edge in state.in_edges(node)
+        if edge.data.data == "x"
+    ]
+    assert read_subsets
+    for subset in read_subsets:
+        ((start, stop, _),) = subset.ndrange()
+        symbols = {
+            symbol: {"size": N, "__x_IDim_range_0": 0, "__x_IDim_range_1": N}[str(symbol)]
+            for symbol in start.free_symbols | stop.free_symbols
+        }
+        assert 0 <= int(start.subs(symbols)) and int(stop.subs(symbols)) <= N - 1
+
+
 def test_gtir_concat_where_two_dimensions():
     M, N = (30, 20)
     domain = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, 30), JDim: (0, 20)})

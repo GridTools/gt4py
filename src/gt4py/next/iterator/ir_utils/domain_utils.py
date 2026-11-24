@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import dataclasses
 import functools
+import itertools
 import warnings
-from typing import Callable, Iterable, Literal, Optional
+from typing import Callable, Iterable, Literal, Optional, Sequence
 
 import numpy as np
 
@@ -34,6 +35,12 @@ _NON_CONTIGUOUS_DOMAIN_WARNING_SKIPPED_OFFSET_TAGS: set[str] = set()
 class SymbolicRange:
     start: itir.Expr
     stop: itir.Expr
+    #: The parts the range is the union of, if one of them may be empty at runtime, else `()`.
+    #: `start` and `stop` are the bounds of the union of the parts, see `_union_of_parts`. The parts
+    #: describe how the range was derived and allow to compute unions and intersections with
+    #: other ranges without taking the convex hull with a part that is empty at runtime. They are
+    #: not part of the value of the range and hence excluded from comparison and hashing.
+    parts: tuple[_RangePart, ...] = dataclasses.field(default=(), compare=False, repr=False)
 
     def __post_init__(self) -> None:
         # TODO(havogt): added this defensive checks as code seems to make this reasonable assumption
@@ -41,7 +48,11 @@ class SymbolicRange:
         assert self.stop is not itir.InfinityLiteral.NEGATIVE
 
     def translate(self, distance: int) -> SymbolicRange:
-        return SymbolicRange(im.plus(self.start, distance), im.plus(self.stop, distance))
+        return SymbolicRange(
+            im.plus(self.start, distance),
+            im.plus(self.stop, distance),
+            tuple(part.translate(distance) for part in self.parts),
+        )
 
     def empty(self) -> bool | None:
         # constant fold so that translated bounds like `0 + 1` are recognized as literals
@@ -52,6 +63,31 @@ class SymbolicRange:
         elif start == stop:
             return True
         return None
+
+
+@dataclasses.dataclass(frozen=True)
+class _RangePart:
+    """
+    A part of a `SymbolicRange`, which may be empty, although this is not known statically.
+
+    Ranges are assumed to be non-empty, unless they are statically empty (see
+    `SymbolicRange.empty`). The intersection of non-empty ranges may however be empty, e.g.,
+    `[0, n[ & [c, inf[` for `c >= n`, which happens for the regions selected by the branches of a
+    `concat_where` if the selected region is empty at runtime. Such a part carries the condition
+    `empty_if` under which it is empty (`start >= stop`) and the `envelope`, a range assumed to be
+    non-empty which contains the part, i.e., the range the part was cut out of.
+    """
+
+    range: SymbolicRange
+    #: A condition evaluated at runtime under which `range` is empty, `None` if the part is assumed
+    #: to be non-empty.
+    empty_if: Optional[itir.Expr]
+    envelope: SymbolicRange
+
+    def translate(self, distance: int) -> _RangePart:
+        return _RangePart(
+            self.range.translate(distance), self.empty_if, self.envelope.translate(distance)
+        )
 
 
 _GRID_TYPE_MAPPING = {
@@ -265,6 +301,308 @@ def _reduce_ranges(
     return SymbolicRange(start, stop)
 
 
+#: A linear expression `sum(coefficient * symbol) + constant` as `(coefficients, constant)`.
+_LinearForm = tuple[frozenset[tuple[str, int]], int]
+
+
+def _linear_form(expr: itir.Expr) -> Optional[_LinearForm]:
+    """
+    Return `expr` in linear form if it is a sum of symbols and integer literals.
+
+    >>> coefficients, constant = _linear_form(im.minus(im.plus("n", 1), "m"))
+    >>> sorted(coefficients), constant
+    ([('m', -1), ('n', 1)], 1)
+    """
+    if isinstance(expr, itir.Literal):
+        return (frozenset(), int(expr.value)) if expr.value.lstrip("-").isdigit() else None
+    if isinstance(expr, itir.SymRef):
+        return frozenset({(str(expr.id), 1)}), 0
+    if cpm.is_call_to(expr, ("plus", "minus")):
+        lhs, rhs = (_linear_form(arg) for arg in expr.args)
+        if lhs is None or rhs is None:
+            return None
+        if cpm.is_call_to(expr, "plus"):
+            rhs = _subtract((frozenset(), 0), rhs)
+        return _subtract(lhs, rhs)
+    return None
+
+
+def _subtract(a: _LinearForm, b: _LinearForm) -> _LinearForm:
+    coefficients = dict(a[0])
+    for symbol, coefficient in b[0]:
+        coefficients[symbol] = coefficients.get(symbol, 0) - coefficient
+    return frozenset((s, c) for s, c in coefficients.items() if c != 0), a[1] - b[1]
+
+
+def _linear_difference(condition: itir.Expr) -> Optional[_LinearForm]:
+    """Return `lhs - rhs` in linear form for a condition `lhs >= rhs`."""
+    if not cpm.is_call_to(condition, "greater_equal"):
+        return None
+    lhs, rhs = (_linear_form(arg) for arg in condition.args)
+    return None if lhs is None or rhs is None else _subtract(lhs, rhs)
+
+
+def _implied(fact: _LinearForm, facts: Sequence[_LinearForm]) -> bool:
+    """
+    Return whether `fact >= 0` follows from `facts >= 0`.
+
+    This is the case if `fact` is the sum of (at most two of) the `facts` and of a non-negative
+    constant. The check is sufficient, not necessary.
+    """
+    for num_facts in range(min(len(facts), 2) + 1):
+        for combination in itertools.combinations(facts, num_facts):
+            remainder = functools.reduce(_subtract, combination, fact)
+            if not remainder[0] and remainder[1] >= 0:
+                return True
+    return False
+
+
+def _flat_args(expr: itir.Expr, op: str) -> list[itir.Expr]:
+    """
+    Return the arguments of the (nested) calls to the associative builtin `op` in `expr`.
+
+    >>> [str(arg) for arg in _flat_args(im.maximum(im.maximum("a", "b"), "c"), "maximum")]
+    ['a', 'b', 'c']
+    """
+    if not cpm.is_call_to(expr, op):
+        return [expr]
+    return [flat_arg for arg in expr.args for flat_arg in _flat_args(arg, op)]
+
+
+def _push_offset(expr: itir.Expr) -> itir.Expr:
+    """`minimum(a, b) + c` -> `minimum(a + c, b + c)`, also for `maximum` and `minus`."""
+    if cpm.is_call_to(expr, ("plus", "minus")):
+        lhs, offset = expr.args
+        lhs = _push_offset(lhs)
+        if cpm.is_call_to(lhs, ("minimum", "maximum")) and _linear_form(offset) is not None:
+            return im.call(lhs.fun.id)(
+                *(_push_offset(im.call(expr.fun.id)(arg, offset)) for arg in lhs.args)
+            )
+    return expr
+
+
+def _provably_less_equal(a: itir.Expr, b: itir.Expr, facts: Sequence[_LinearForm] = ()) -> bool:
+    """Return whether `a <= b` follows from `facts >= 0`. Sufficient, not necessary."""
+    a, b = _push_offset(a), _push_offset(b)
+    if cpm.is_call_to(b, "minimum"):
+        return all(_provably_less_equal(a, arg, facts) for arg in b.args)
+    if cpm.is_call_to(a, "maximum"):
+        return all(_provably_less_equal(arg, b, facts) for arg in a.args)
+    if cpm.is_call_to(a, "minimum"):
+        return any(_provably_less_equal(arg, b, facts) for arg in a.args)
+    if cpm.is_call_to(b, "maximum"):
+        return any(_provably_less_equal(a, arg, facts) for arg in b.args)
+    a_form, b_form = _linear_form(a), _linear_form(b)
+    if a_form is None or b_form is None:
+        return a == b
+    return _implied(_subtract(b_form, a_form), facts)
+
+
+def _simplify_min_max(expr: itir.Expr, op: Literal["minimum", "maximum"]) -> itir.Expr:
+    """
+    Drop the arguments of a (nested) call to `op` that are never its result.
+
+    >>> str(_simplify_min_max(im.maximum(im.maximum("n", 0), im.plus("n", 1)), "maximum"))
+    'maximum(0, n + 1)'
+    """
+
+    def dominated(a: itir.Expr, b: itir.Expr) -> bool:
+        # `a` is never the result of `maximum(a, b)` if `a <= b`
+        return _provably_less_equal(a, b) if op == "maximum" else _provably_less_equal(b, a)
+
+    kept: list[itir.Expr] = []
+    for arg in _flat_args(_push_offset(expr), op):
+        if not any(dominated(arg, other) for other in kept):
+            kept = [other for other in kept if not dominated(other, arg)] + [arg]
+    return functools.reduce(im.call(op), kept)
+
+
+#: A disjunction of conditions, see `_add_condition`.
+_Disjunction = dict[itir.Expr | frozenset[tuple[str, int]], tuple[int, itir.Expr]]
+
+
+def _add_condition(disjunction: _Disjunction, condition: itir.Expr) -> None:
+    """
+    Add a condition to a disjunction of conditions, dropping the ones implied by another one.
+
+    `a + k1 >= b` implies `a + k2 >= b` for `k1 <= k2`, so only the latter is kept, e.g.,
+    `n >= m | n + 1 >= m` is `n + 1 >= m`.
+    """
+    if cpm.is_call_to(condition, "or_"):
+        for arg in condition.args:
+            _add_condition(disjunction, arg)
+        return
+    key: itir.Expr | frozenset[tuple[str, int]] = condition
+    weakness = 0
+    if (difference := _linear_difference(condition)) is not None:
+        # `lhs >= rhs` <=> `lhs - rhs >= 0`, the larger the constant the weaker the condition
+        key, weakness = difference
+    if key not in disjunction or disjunction[key][0] < weakness:
+        disjunction[key] = (weakness, condition)
+
+
+def _range_hull(*ranges: SymbolicRange, simplify: bool = False) -> SymbolicRange:
+    hull = _reduce_ranges(*ranges, start_reduce_op=im.minimum, stop_reduce_op=im.maximum)
+    if not simplify:
+        return hull
+    return SymbolicRange(
+        _simplify_min_max(hull.start, "minimum"), _simplify_min_max(hull.stop, "maximum")
+    )
+
+
+def _parts(range_: SymbolicRange) -> tuple[_RangePart, ...]:
+    """Return the parts of a range; a range without parts is its only, non-empty, part."""
+    return range_.parts or (_RangePart(range_, None, range_),)
+
+
+def _intersection_of_parts(parts: Sequence[_RangePart]) -> Optional[_RangePart]:
+    """Return the intersection of `parts`, or `None` if it is statically empty."""
+    range_ = _reduce_ranges(
+        *(part.range for part in parts), start_reduce_op=im.maximum, stop_reduce_op=im.minimum
+    )
+    range_ = SymbolicRange(
+        _simplify_min_max(range_.start, "maximum"), _simplify_min_max(range_.stop, "minimum")
+    )
+    if range_.empty():
+        return None
+    # The intersection is empty if one of the parts is empty or if two of them do not overlap,
+    # i.e., `maximum(a, ...) >= minimum(b, ...)`, which holds if `a >= b` for any of the bounds
+    # composing the start of one and the stop of the other part. Comparing these instead of the
+    # starts and stops allows to detect more statically empty intersections and keeps the
+    # condition small. For the intersection of a range with a `concat_where` condition, i.e., a
+    # half-infinite range, this is a single comparison.
+    disjunction: _Disjunction = {}
+    for part in parts:
+        if part.empty_if is not None:
+            _add_condition(disjunction, part.empty_if)
+    for part_a, part_b in itertools.permutations(parts, 2):
+        for start in _flat_args(_push_offset(part_a.range.start), "maximum"):
+            for stop in _flat_args(_push_offset(part_b.range.stop), "minimum"):
+                if start == itir.InfinityLiteral.NEGATIVE or stop == itir.InfinityLiteral.POSITIVE:
+                    continue
+                no_overlap: itir.Expr = ConstantFolding.apply(im.greater_equal(start, stop))  # type: ignore[assignment]  # always an itir.Expr
+                difference = _linear_difference(no_overlap)
+                if difference is not None and not difference[0]:  # e.g. `n + 1 >= n`
+                    no_overlap = im.literal_from_value(difference[1] >= 0)
+                if no_overlap == im.literal_from_value(True):
+                    return None
+                if no_overlap != im.literal_from_value(False):
+                    _add_condition(disjunction, no_overlap)
+    envelopes = [part.envelope for part in parts if is_finite(part.envelope)]
+    if not disjunction or not envelopes:
+        # never empty, or not bounded such that the bounds can be guarded in `_union_of_parts`:
+        # assume the intersection to be non-empty (over-approximation)
+        return _RangePart(range_, None, range_)
+    empty_if = functools.reduce(im.or_, (condition for _, condition in disjunction.values()))
+    return _RangePart(range_, empty_if, envelopes[0])
+
+
+def _needs_guard(
+    part: _RangePart, others: Sequence[_RangePart], side: Literal["start", "stop"]
+) -> bool:
+    """
+    Return whether the `side` bound of `part` must be guarded in the union with `others`.
+
+    The guard is not needed if whenever `part.empty_if` holds (for each of its disjuncts), the
+    bound of each other part that is non-empty dominates the bound of `part`, which then does not
+    change the union, unless all parts are empty. This is the case, e.g., for the two regions
+    selected by the branches of `concat_where(I < c, ...)`: if one is empty, the other one is
+    the whole domain. In contrast, the two regions selected by the false branch of
+    `concat_where(I == c, ...)` leave a gap at `c`, which the convex hull fills if one of them is
+    empty. The envelopes are assumed to be non-empty.
+    """
+    assert part.empty_if is not None
+
+    def disjuncts(condition: itir.Expr) -> Optional[list[_LinearForm]]:
+        differences = [_linear_difference(arg) for arg in _flat_args(condition, "or_")]
+        return None if None in differences else differences  # type: ignore[return-value]  # checked
+
+    def non_empty(range_: SymbolicRange) -> list[_LinearForm]:
+        start, stop = _linear_form(range_.start), _linear_form(range_.stop)
+        if start is None or stop is None:
+            return []
+        return [_subtract(_subtract(stop, start), (frozenset(), 1))]  # `stop - start - 1 >= 0`
+
+    part_disjuncts = disjuncts(part.empty_if)
+    if part_disjuncts is None:
+        return True
+    for disjunct in part_disjuncts:
+        for other in others:
+            facts = [disjunct, *non_empty(part.envelope), *non_empty(other.envelope)]
+            # `other` is non-empty, i.e., none of the disjuncts `lhs - rhs >= 0` of its condition
+            # holds: `rhs - lhs - 1 >= 0`
+            other_disjuncts = [] if other.empty_if is None else disjuncts(other.empty_if) or []
+            facts += [_subtract((frozenset(), -1), d) for d in other_disjuncts]
+            if side == "start":
+                dominated = _provably_less_equal(other.range.start, part.range.start, facts)
+            else:
+                dominated = _provably_less_equal(part.range.stop, other.range.stop, facts)
+            if not dominated:
+                return True
+    return False
+
+
+def _union_of_parts(parts: Sequence[_RangePart]) -> SymbolicRange:
+    """
+    Return the convex hull of the parts that are non-empty at runtime.
+
+    Parts with the same `empty_if` condition, e.g., the translations of one part accessed with
+    several shifts, are empty at the same time and are combined into their convex hull first,
+    and so are all parts that are assumed to be non-empty. If a single part remains, it is the
+    result, without any runtime check. Otherwise, the bounds of the parts that may be empty are
+    guarded by their condition, unless this is not needed (see `_needs_guard`): an empty part
+    contributes the stop of the convex hull of all envelopes to the start of the union, which is
+    not smaller than the start of any non-empty part (each of which is contained in its
+    envelope), and vice versa for the stop. This keeps the size of the expressions linear in the
+    number of parts.
+
+    The result is exact (the convex hull of the non-empty parts) if at least one part is
+    non-empty. If all parts are empty, i.e., the range is not needed at all, the result may be
+    non-empty, like the convex hull computed without taking emptiness into account.
+    """
+    assert parts
+    groups: dict[Optional[itir.Expr], list[_RangePart]] = {}
+    for part in parts:
+        groups.setdefault(part.empty_if, []).append(part)
+    merged = [
+        _RangePart(
+            _range_hull(*(part.range for part in group), simplify=True),
+            empty_if,
+            _range_hull(*(part.envelope for part in group), simplify=True),
+        )
+        for empty_if, group in groups.items()
+    ]
+    if None in groups:
+        # a part contained in a range which is part of the union anyway does not contribute
+        (non_empty_part,) = [part for part in merged if part.empty_if is None]
+        merged = [
+            part
+            for part in merged
+            if part.empty_if is None or part.envelope != non_empty_part.range
+        ]
+
+    if len(merged) == 1:
+        (part,) = merged
+        return dataclasses.replace(part.range, parts=() if part.empty_if is None else (part,))
+
+    envelope = _range_hull(*(part.envelope for part in merged))
+    starts, stops = [], []
+    for i, part in enumerate(merged):
+        others = merged[:i] + merged[i + 1 :]
+        start, stop = part.range.start, part.range.stop
+        if part.empty_if is not None and _needs_guard(part, others, "start"):
+            start = im.if_(part.empty_if, envelope.stop, start)
+        if part.empty_if is not None and _needs_guard(part, others, "stop"):
+            stop = im.if_(part.empty_if, envelope.start, stop)
+        starts.append(start)
+        stops.append(stop)
+    return SymbolicRange(
+        ConstantFolding.apply(functools.reduce(im.minimum, starts)),  # type: ignore[arg-type]  # always an itir.Expr
+        ConstantFolding.apply(functools.reduce(im.maximum, stops)),  # type: ignore[arg-type]  # always an itir.Expr
+        tuple(merged),
+    )
+
+
 def _range_union(*ranges: SymbolicRange) -> SymbolicRange:
     """
     Return the union of a list of ranges, computed as the convex hull.
@@ -272,13 +610,19 @@ def _range_union(*ranges: SymbolicRange) -> SymbolicRange:
     This only computes the correct value if the non-empty ranges are overlapping or adjacent.
     An empty range is the identity element of the union, so empty ranges are dropped rather than
     fed into the convex hull, which would otherwise over-approximate (e.g. `[10, 10[ | [11, 11[`
-    is empty, but its convex hull is `[10, 11[`). Emptiness is only decidable for static ranges;
-    non-static ranges may not be empty for now.
+    is empty, but its convex hull is `[10, 11[`). Emptiness is only decidable for static ranges.
+    A part of a range that may be empty at runtime (see `_RangePart`) only contributes to the
+    convex hull if it is non-empty, which is decided at runtime (see `_union_of_parts`). All other
+    non-static ranges are assumed to be non-empty.
     """
     non_empty_ranges = [range_ for range_ in ranges if not range_.empty()]
     if not non_empty_ranges:
         return ranges[0]  # all empty -> empty
-    return _reduce_ranges(*non_empty_ranges, start_reduce_op=im.minimum, stop_reduce_op=im.maximum)
+    if not any(range_.parts for range_ in non_empty_ranges):
+        return _range_hull(*non_empty_ranges)
+    return _union_of_parts(
+        [part for range_ in non_empty_ranges for part in _parts(range_) if not part.range.empty()]
+    )
 
 
 def _range_intersection(*ranges: SymbolicRange) -> SymbolicRange:
@@ -288,12 +632,41 @@ def _range_intersection(*ranges: SymbolicRange) -> SymbolicRange:
     An empty range is the absorbing element of the intersection, so it is returned directly.
     Folding it into `max`/`min` instead would give a wrong (possibly non-empty, possibly
     unbounded) result, e.g. `[1, 1[ & [0, inf[` would yield `[1, inf[`. Emptiness is only
-    decidable for static ranges; non-static ranges may not be empty for now.
+    decidable for static ranges. The intersection of non-empty ranges may however be empty at
+    runtime, e.g. `[0, n[ & [c, inf[` for `c >= n`. The result then records the condition under
+    which this is the case (see `_RangePart`). The intersection with a range composed of parts
+    is the union of the intersections with each part.
     """
     for range_ in ranges:
         if range_.empty():
             return range_
-    return _reduce_ranges(*ranges, start_reduce_op=im.maximum, stop_reduce_op=im.minimum)
+    result = _reduce_ranges(*ranges, start_reduce_op=im.maximum, stop_reduce_op=im.minimum)
+    # the universe `]-inf, inf[` is the identity element of the intersection
+    bounded_ranges = [
+        range_
+        for range_ in ranges
+        if (range_.start, range_.stop)
+        != (itir.InfinityLiteral.NEGATIVE, itir.InfinityLiteral.POSITIVE)
+    ]
+    if len(bounded_ranges) <= 1:
+        return dataclasses.replace(result, parts=bounded_ranges[0].parts if bounded_ranges else ())
+    parts = [
+        part
+        for combination in itertools.product(*(_parts(range_) for range_ in bounded_ranges))
+        if (part := _intersection_of_parts(combination)) is not None
+    ]
+    if not parts:  # statically empty
+        if result.empty():
+            return result
+        zero = im.literal("0", builtins.INTEGER_INDEX_BUILTIN)
+        return SymbolicRange(zero, zero)
+    if not any(range_.parts for range_ in bounded_ranges):
+        # intersection of ranges without parts: keep the bounds as they are
+        (part,) = parts
+        if part.empty_if is None:
+            return result
+        return dataclasses.replace(result, parts=(dataclasses.replace(part, range=result),))
+    return _union_of_parts(parts)
 
 
 def _reduce_domains(

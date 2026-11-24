@@ -240,6 +240,33 @@ def test_dimension_two_nested_conditions(cartesian_case, static_domains: bool):
     )
 
 
+@pytest.mark.uses_cartesian_shift
+@pytest.mark.uses_scalar_in_domain
+def test_boundary_levels_with_vertical_stencil(cartesian_case, static_domains: bool):
+    """
+    Vertical stencil in the interior, boundary values on the first and the last level.
+
+    All fields have exactly the size of the output: the stencil, which reads the levels above and
+    below, can only be evaluated in the interior, where it is selected. Evaluating it on the
+    first or the last level, where it is not selected, reads outside of `a`. The results are
+    correct either way (the values are discarded), but such out-of-bounds reads are invalid
+    memory accesses on GPUs (detected e.g. by `compute-sanitizer --tool memcheck`).
+    """
+
+    @gtx.field_operator(static_domains=static_domains)
+    def testee(a: cases.IJKField, nlev: np.int32) -> cases.IJKField:
+        interior = a(KDim - 1) + a + a(KDim + 1)
+        return concat_where(KDim == 0, a, concat_where(KDim == nlev - 1, a, interior))
+
+    a = cases.allocate(cartesian_case, testee, "a")()
+    out = cases.allocate(cartesian_case, testee, cases.RETURN)()
+
+    a_np = a.asnumpy()
+    ref = a_np.copy()
+    ref[:, :, 1:-1] = a_np[:, :, :-2] + a_np[:, :, 1:-1] + a_np[:, :, 2:]
+    cases.verify(cartesian_case, testee, a, out.domain.shape[2], out=out, ref=ref)
+
+
 @pytest.mark.uses_scalar_in_domain
 def test_dimension_two_conditions_and(cartesian_case, static_domains: bool):
     @gtx.field_operator(static_domains=static_domains)
