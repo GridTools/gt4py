@@ -178,3 +178,9 @@ collection of the same type.
   ones for intermediate results.
 - Every call needs the `out` argument.
 - The type of `out` must be the type returned by the operator.
+- A call can read a field that it also writes only at the point being written,
+  as in `increment(a, out=a)` with `return a + 1.0`. Reading it at another
+  point, e.g. through `a(I + 1)` or a neighbor, is rejected when the program is
+  defined: the result would depend on the order in which the points are
+  computed and written. Write the result to another field instead. Returning
+  the field unchanged, as one of several results, is allowed.

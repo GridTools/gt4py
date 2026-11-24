@@ -42,6 +42,10 @@ def _did_you_mean(name: str, candidates: Iterable[str]) -> list[str]:
     return [f"Did you mean {' or '.join(f'{m!r}' for m in matches)}?"]
 
 
+def _enumerate(items: Sequence[str]) -> str:
+    return " and ".join(filter(None, (", ".join(items[:-1]), items[-1])))
+
+
 class DSLError(GT4PyError):
     """
     Error in user code of one of the GT4Py-embedded DSLs.
@@ -214,6 +218,45 @@ class InvalidParameterAnnotationError(DSLTypeError):
         )
         self.param_name = param_name
         self.annotated_type = type_
+
+
+class InOutFieldReadWithOffsetError(DSLError):
+    """A program statement writes a field that it also reads at another point."""
+
+    code: ClassVar[str] = "inout-field-read-with-offset"
+
+    field_name: str
+
+    def __init__(
+        self,
+        location: Optional[SourceLocation],
+        field_name: str,
+        offsets: Sequence[str],
+        *,
+        related: Sequence[tuple[SourceLocation, str]] = (),
+    ) -> None:
+        super().__init__(
+            location,
+            f"Field '{field_name}' is written by this call and also read by it at another point.",
+            label="written here",
+            related=related,
+            notes=(
+                f"'{field_name}' is read {_enumerate(offsets)}.",
+                (
+                    "A call may read a field it writes only at the point being written, as in "
+                    "'a + 1.0' with 'out=a'. Otherwise the result depends on the order in which "
+                    "points are computed and written, which GT4Py does not define (see ADR 18, "
+                    "rule 3)."
+                ),
+            ),
+            hints=(
+                (
+                    f"Write the result to a field other than '{field_name}' and, if needed, copy "
+                    "it back in a separate call."
+                ),
+            ),
+        )
+        self.field_name = field_name
 
 
 class CompilationError(GT4PyError):
