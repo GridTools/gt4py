@@ -198,8 +198,8 @@ It's responsibility of the translator to check if 'Device' is valid for the give
 def _gpu_index(library: str, device: core_defs.Device, count: int) -> int:
     if not 0 <= device.device_id < count:
         raise ValueError(
-            f"{library} has no {device.device_type.name} device {device.device_id},"
-            f" it has {count} GPU devices."
+            f"{library} has no {device.device_type.name} device {device.device_id}"
+            f" (number of GPU devices: {count})."
         )
     return device.device_id
 
@@ -264,10 +264,11 @@ def device_context(device: Any) -> contextlib.AbstractContextManager:
     """
     The context in which an array namespace creates arrays on the translated `device`.
 
-    array-api-compat ignores `device` when CuPy creates an array: CuPy's current device decides.
+    array-api-compat ignores `device` in CuPy's `empty`, `zeros`, `ones` and `full`: CuPy's
+    current device decides.
     """
     if cupy is not None and isinstance(device, cupy.cuda.Device):
-        return device
+        return cupy.cuda.Device(device.id)
     return contextlib.nullcontext()
 
 
