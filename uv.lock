@@ -1582,7 +1582,7 @@ typing-exports = [
 
 [package.metadata]
 requires-dist = [
-    { name = "array-api-compat", specifier = ">=1.13" },
+    { name = "array-api-compat", specifier = ">=1.14" },
     { name = "attrs", specifier = ">=21.3" },
     { name = "black", marker = "extra == 'cartesian'", specifier = ">=25.11" },
     { name = "boltons", specifier = ">=20.1" },

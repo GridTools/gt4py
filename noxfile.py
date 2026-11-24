@@ -22,6 +22,7 @@ from __future__ import annotations
 import os
 import pathlib
 import shutil
+import sys
 import tomllib
 from collections.abc import Sequence
 from typing import Final, Literal, TypeAlias
@@ -141,6 +142,11 @@ def install_session_venv(
 def _session_runs_torch(session: nox.Session, device: DeviceOption) -> bool:
     if device in ("rocm6", "rocm7"):
         # the torch wheels on PyPI are CUDA-only
+        return False
+    if sys.platform == "darwin":
+        # the torch wheels carry their own `libomp.dylib`, which clashes with the Homebrew
+        # one the compiled gtfn and dace extensions link: two OpenMP runtimes abort with
+        # `OMP: Error #15`
         return False
     return True
 
