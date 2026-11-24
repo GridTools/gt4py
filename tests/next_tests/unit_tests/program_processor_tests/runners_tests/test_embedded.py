@@ -333,6 +333,25 @@ def test_torch_compile_allocates_on_the_given_device():
     assert field.ndarray.is_cuda
 
 
+@pytest.mark.requires_jax
+def test_jax_backends_allocate_and_run_on_the_given_device():
+    import jax
+
+    from gt4py._core import definitions as core_defs
+    from gt4py.next import experimental
+
+    cpu = jax.local_devices(backend="cpu")[0]
+    domain = gtx.domain({IDim: 3})
+    device = core_defs.Device(core_defs.DeviceType.CPU, 0)
+    f = gtx.as_field(domain, np.arange(3.0), allocator=experimental.embedded_jax, device=device)
+    out = gtx.zeros(domain, allocator=experimental.jax_jit, device=device)
+
+    plus_one.with_backend(experimental.jax_jit)(f, out=out, offset_provider={})
+
+    assert f.ndarray.devices() == out.ndarray.devices() == {cpu}
+    np.testing.assert_array_equal(out.asnumpy(), np.arange(3.0) + 1.0)
+
+
 @pytest.fixture(
     params=[
         "numpy",
