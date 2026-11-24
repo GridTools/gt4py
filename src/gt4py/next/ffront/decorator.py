@@ -99,17 +99,11 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
         metadata=utils.gt4py_metadata(fingerprint=False)
     )
     compilation_options: options.CompilationOptions
-    # an attribute, not a property, to cost the call no more than `backend is not None`
-    _is_compiled: bool = dataclasses.field(
-        init=False, repr=False, compare=False, metadata=utils.gt4py_metadata(fingerprint=False)
-    )
 
-    def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "_is_compiled",
-            self.backend is not None
-            and not isinstance(self.backend, next_backend.EmbeddedJitBackend),
+    @functools.cached_property
+    def _has_compiled_backend(self) -> bool:
+        return self.backend is not None and not isinstance(
+            self.backend, next_backend.EmbeddedJitBackend
         )
 
     @functools.cached_property
@@ -150,7 +144,7 @@ class _CompilableGTEntryPointMixin(Generic[ffront_stages.DSLDefinitionT]):
     ) -> compiled_program.CompiledProgramsPool:
         if self.backend is None or self.backend == eve.NOTHING:
             raise RuntimeError("Cannot compile a program without backend.")
-        if not self._is_compiled:
+        if not self._has_compiled_backend:
             raise RuntimeError(
                 f"Backend '{self.backend.name}' runs programs embedded; it does not compile them."
             )
@@ -281,7 +275,6 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
 
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self) -> None:
-        super().__post_init__()
         no_args_past = workflow.ConcreteArtifact(self.past_stage, arguments.CompileTimeArgs.empty())
         _ = self._frontend_transforms.past_lint(no_args_past).data
 
@@ -379,7 +372,7 @@ class Program(_CompilableGTEntryPointMixin[ffront_stages.DSLProgramDef]):
                     kwarg_types={k: type_translation.from_value(v) for k, v in kwargs.items()},
                 )
 
-            if self._is_compiled:
+            if self._has_compiled_backend:
                 self._compiled_programs(
                     *args, **kwargs, offset_provider=offset_provider, enable_jit=enable_jit
                 )
@@ -505,7 +498,6 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
     # TODO(ricoh): linting should become optional, up to the backend.
     def __post_init__(self) -> None:
         """This ensures that DSL linting occurs at decoration time."""
-        super().__post_init__()
         _ = self.foast_stage
 
     @functools.cached_property
@@ -557,7 +549,7 @@ class FieldOperator(_CompilableGTEntryPointMixin[ffront_stages.DSLFieldOperatorD
         return self.foast_stage.closure_vars
 
     def __call__(self, *args: Any, enable_jit: bool | None = None, **kwargs: Any) -> Any:
-        if not embedded_context.within_valid_context() and self._is_compiled:
+        if not embedded_context.within_valid_context() and self._has_compiled_backend:
             # non embedded execution
             offset_provider = {**kwargs.pop("offset_provider", {})}
             if "out" not in kwargs:
