@@ -76,6 +76,39 @@ def test_is_array_namespace_torch():
     assert ndarray_utils.is_array_namespace(torch)
 
 
+@pytest.mark.requires_jax
+@pytest.mark.parametrize("gt4py_device", [None, definitions.Device(definitions.DeviceType.CPU, 0)])
+def test_get_device_translator_jax_cpu(gt4py_device):
+    import jax
+    import jax.numpy as jnp
+
+    translator = ndarray_utils.get_device_translator(jnp)
+    expected = None if gt4py_device is None else jax.local_devices(backend="cpu")[0]
+    assert translator(gt4py_device) == expected
+
+
+@pytest.mark.requires_jax
+@pytest.mark.requires_gpu
+@pytest.mark.parametrize("device_type", [definitions.DeviceType.CUDA, definitions.DeviceType.ROCM])
+def test_get_device_translator_jax_gpu(device_type):
+    import jax
+    import jax.numpy as jnp
+
+    try:
+        gpus = jax.local_devices(backend="gpu")
+    except RuntimeError:
+        pytest.skip("no jax GPU device")
+    translator = ndarray_utils.get_device_translator(jnp)
+    assert translator(definitions.Device(device_type, 0)) == gpus[0]
+
+
+@pytest.mark.requires_jax
+def test_is_array_namespace_jax():
+    import jax.numpy as jnp
+
+    assert ndarray_utils.is_array_namespace(jnp)
+
+
 @pytest.mark.parametrize("array_ns_name", ["numpy", "array_api_strict"])
 @pytest.mark.parametrize(
     "scalar_type", [np.bool_, np.int32, np.int64, np.uint8, np.float32, np.float64]

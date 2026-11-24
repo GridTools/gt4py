@@ -27,6 +27,12 @@ try:
 except ImportError:
     torch = None
 
+try:
+    import jax
+    import jax.numpy as jnp
+except ImportError:
+    jax = None
+
 
 class _ArrayDType(Protocol):
     # The only requirement for array API dtypes is equality comparability.
@@ -214,6 +220,21 @@ if torch is not None:
         raise ValueError(f"torch does not support device type {device.device_type}.")
 
     _device_translation_registry[torch] = _torch_device_translator
+
+
+if jax is not None:
+
+    def _jax_device_translator(device: core_defs.Device | None) -> Any:
+        if device is None:
+            return None
+        if device.device_type == core_defs.DeviceType.CPU:
+            return jax.local_devices(backend="cpu")[0]
+        # jax's 'gpu' platform is CUDA or ROCm, whichever jaxlib was built for
+        if device.device_type in (core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM):
+            return jax.local_devices(backend="gpu")[device.device_id]
+        raise ValueError(f"jax does not support device type {device.device_type}.")
+
+    _device_translation_registry[cast(ArrayNamespace, jnp)] = _jax_device_translator
 
 
 def get_device_translator(array_ns: ArrayNamespace) -> Callable[[core_defs.Device | None], Any]:
