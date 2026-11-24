@@ -55,6 +55,28 @@ def _from_numpy_dtype(dtype: np.dtype) -> Any:
     return mx.bool_ if dtype == np.bool_ else getattr(mx, dtype.name)
 
 
+_NUMPY_DTYPES: Final[dict[Any, np.dtype]] = {
+    mx.bool_: np.dtype(np.bool_),
+    **{
+        getattr(mx, name): np.dtype(name)
+        for name in (
+            "int8",
+            "int16",
+            "int32",
+            "int64",
+            "uint8",
+            "uint16",
+            "uint32",
+            "uint64",
+            "float16",
+            "float32",
+            "float64",
+            "complex64",
+        )
+    },
+}
+
+
 def _check_dtype(dtype: Any, device: Any) -> None:
     """Raise for float64 on the GPU, which MLX does not support."""
     if dtype == mx.float64 and (mx.default_device() if device is None else device) == mx.gpu:
@@ -72,8 +94,12 @@ def asarray(
     if not isinstance(obj, mx.array):
         # through NumPy, so that the dtype of NumPy data, and NumPy's dtypes of Python scalars, are kept
         obj = np.asarray(obj)
-        if dtype is None:
-            dtype = _from_numpy_dtype(obj.dtype)
+        dtype = _from_numpy_dtype(obj.dtype) if dtype is None else dtype
+        _check_dtype(dtype, device)
+        # Converted by NumPy and copied by `mx.array`: with Metal, `mx.asarray` (MLX 0.32.4)
+        # shares the memory of NumPy data, and reinterprets its bytes instead of converting
+        # them to another `dtype`.
+        return mx.array(np.asarray(obj, dtype=_NUMPY_DTYPES[dtype]), dtype=dtype)
     elif (dtype is None or dtype == obj.dtype) and not copy:
         _check_dtype(obj.dtype, device)
         return obj

@@ -64,5 +64,5 @@ jobs:
         run: |
           uv run --extra standard --extra testing --extra mlx --group test \
             pytest -sv --require-optional-deps \
-            -m "requires_mlx or requires_mlx_metal" \
+            -m "(requires_mlx or requires_mlx_metal) and not (requires_atlas or requires_gpu or requires_jax or requires_torch or requires_torch_cuda)" \
             tests/next_tests tests/core_tests

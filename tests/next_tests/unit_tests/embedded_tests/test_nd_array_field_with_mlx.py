@@ -99,6 +99,18 @@ def test_asarray_keeps_numpy_dtypes(data, expected_dtype):
     np.testing.assert_array_equal(np.array(result), np.asarray(data, dtype=expected_dtype))
 
 
+def test_asarray_converts_and_copies_numpy_data():
+    # with Metal, `mlx.core.asarray` shares the memory of NumPy data and reinterprets its bytes
+    data = np.arange(6).reshape(2, 3)
+
+    result = xp.asarray(data, dtype=mx.float64)
+    same_dtype = xp.asarray(data)
+    data[...] = -1
+
+    np.testing.assert_array_equal(np.array(result), np.arange(6.0).reshape(2, 3))
+    np.testing.assert_array_equal(np.array(same_dtype), np.arange(6).reshape(2, 3))
+
+
 def test_creation_functions_default_to_numpy_dtypes():
     assert xp.empty((2,)).dtype == mx.float64
     assert xp.zeros((2,)).dtype == mx.float64
