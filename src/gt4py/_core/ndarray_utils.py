@@ -233,8 +233,10 @@ if jax is not None:
         if device.device_type in (core_defs.DeviceType.CUDA, core_defs.DeviceType.ROCM):
             try:
                 gpus = jax.local_devices(backend="gpu")
-            except RuntimeError:  # jaxlib without a GPU plugin
-                gpus = []
+            except RuntimeError as error:  # e.g. a jaxlib without GPU support, or a driver failure
+                raise ValueError(
+                    f"jax has no {device.device_type.name} device {device.device_id}: {error}"
+                ) from error
             if not 0 <= device.device_id < len(gpus):
                 raise ValueError(
                     f"jax has no {device.device_type.name} device {device.device_id},"

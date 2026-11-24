@@ -113,7 +113,7 @@ def test_get_device_translator_jax_missing_gpu(device_type):
     except RuntimeError:
         num_gpus = 0
     translator = ndarray_utils.get_device_translator(jnp)
-    with pytest.raises(ValueError, match=f"jax has no {device_type.name} device {num_gpus},"):
+    with pytest.raises(ValueError, match=f"jax has no {device_type.name} device {num_gpus}"):
         translator(definitions.Device(device_type, num_gpus))
 
 
