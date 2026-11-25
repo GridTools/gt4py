@@ -20,7 +20,7 @@ from gt4py.next.program_processors.runners.dace.transformations import map_fusio
 from . import util
 
 
-def _make_sdfg(*, upper_consumer=True, later_state=False, consumer_start=1):
+def _make_sdfg(*, upper_consumer=True, later_state=False, consumer_start=1, upper_start=3):
     sdfg = dace.SDFG("shared_output_bands")
     for name in ("input", "theta", "rho", "wind"):
         sdfg.add_array(name, [6, 12], dace.float64)
@@ -37,7 +37,7 @@ def _make_sdfg(*, upper_consumer=True, later_state=False, consumer_start=1):
         external_edges=True,
     )
     consumers = []
-    for name, bounds, factor in [("lower", "0:3", 3), ("upper", "3:12", 4)]:
+    for name, bounds, factor in [("lower", "0:3", 3), ("upper", f"{upper_start}:12", 4)]:
         if name == "upper" and not upper_consumer:
             continue
         _, entry, _ = state.add_mapped_tasklet(
@@ -191,6 +191,36 @@ def test_shared_output_split_respects_callback():
         == 0
     )
     assert sdfg.to_json() == before
+
+
+@pytest.mark.parametrize(
+    "upper_first, lower_eligible", [(False, True), (True, True), (False, False)]
+)
+def test_shared_output_consumer_order(upper_first, lower_eligible):
+    # Leave a gap between the two consumers so their splits produce different map ranges.
+    sdfg, state, access, _, _, consumers = _make_sdfg(upper_start=7)
+    if not lower_eligible:
+        # This consumer also needs a horizontal split. Only k splits are enabled below.
+        consumers[0].map.range = dace.subsets.Range.from_string("2:5, 0:3")
+        dace.sdfg.propagation.propagate_memlets_state(sdfg, state)
+    if upper_first:
+        lower = state.out_edges(access["theta"])[0]
+        state.remove_edge(lower)
+        state.add_edge(lower.src, lower.src_conn, lower.dst, lower.dst_conn, lower.data)
+
+    gtx_transformations.gt_vertical_map_split_fusion(
+        sdfg,
+        run_simplify=False,
+        run_map_fusion=False,
+        consolidate_edges_only_if_not_extending=True,
+        fuse_map_fragments=True,
+        allow_shared_output=True,
+        shared_output_split_dimension="k",
+        validate_all=True,
+    )
+    maps = [node.map for node in state.nodes() if isinstance(node, dace_nodes.MapEntry)]
+    remainder = "1:5, 3:12" if lower_eligible and not upper_first else "1:5, 0:7"
+    assert remainder in {str(map_.range) for map_ in maps}
 
 
 def test_shared_output_split_can_be_selected_by_optimizer_hook():

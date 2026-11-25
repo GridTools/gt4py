@@ -24,7 +24,7 @@ from dace.sdfg import (
     utils as dace_sdutils,
 )
 from dace.transformation.dataflow import map_fusion_helper as dace_mfhelper
-from dace.transformation.passes import analysis as dace_analysis
+from dace.transformation.passes import analysis as dace_analysis, pattern_matching as dace_matching
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import (
@@ -212,7 +212,8 @@ def gt_vertical_map_split_fusion(
             `check_fusion_callback` is not used.
         single_use_data: Precomputed single use data.
         allow_shared_output: Allow splitting pointwise external outputs while
-            preserving their stores. Disabled until explicitly selected.
+            preserving their stores. Without a split callback, competing readers
+            are considered in the producer's output edge order.
         shared_output_data: If given, restrict shared-output splitting to candidates
             connected through these arrays. `None` allows any eligible array; an empty
             sequence disables shared-output splitting. Requires `allow_shared_output=True`.
@@ -240,8 +241,14 @@ def gt_vertical_map_split_fusion(
         find_single_use_data = dace_analysis.FindSingleUseData()
         single_use_data = find_single_use_data.apply_pass(sdfg, None)
 
+    # An explicit split hook can change the options for each match.
+    split_type = (
+        _OrderedSharedOutputSplit
+        if allow_shared_output and check_split_callback is None
+        else VerticalSplitMapRange
+    )
     transformations = [
-        VerticalSplitMapRange(
+        split_type(
             only_toplevel_maps=True,
             check_split_callback=check_split_callback,
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
@@ -1082,6 +1089,58 @@ class VerticalSplitMapRange(SplitMapRange):
 
             # This is not efficient, but it is currently the only way to run it
             sdfg.apply_transformations_repeated(trafo, validate=False, validate_all=False)
+
+
+class _OrderedSharedOutputSplit(VerticalSplitMapRange):
+    """Prefer the first eligible consumer in the producer's output edge order."""
+
+    def __init__(self, **options: Any) -> None:
+        super().__init__(**options)
+        self._options = options
+
+    def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
+        if self.access_node.desc(sdfg).transient:
+            return super().apply(graph, sdfg)
+
+        producer = self.first_map_exit
+        readers = dict.fromkeys(
+            read.dst
+            for write in graph.out_edges(producer)
+            if isinstance(write.dst, dace_nodes.AccessNode) and not write.dst.desc(sdfg).transient
+            for read in graph.out_edges(write.dst)
+            if isinstance(read.dst, dace_nodes.MapEntry)
+        )
+        earlier: dict[dace_nodes.MapEntry, int] = {}
+        for reader in readers:
+            if reader is self.second_map_entry:
+                break
+            earlier[reader] = len(earlier)
+        if earlier:
+
+            def is_earlier(
+                match: VerticalSplitMapRange,
+                _first: dace_nodes.MapExit,
+                _second: dace_nodes.MapEntry,
+                _state: dace.SDFGState,
+                owner: dace.SDFG,
+            ) -> bool:
+                return (
+                    match.first_map_exit is producer
+                    and match.second_map_entry in earlier
+                    and not match.access_node.desc(owner).transient
+                )
+
+            # Passing the type gives each eligible match its own transformation instance.
+            matches = dace_matching.match_patterns(
+                sdfg,
+                [VerticalSplitMapRange],
+                states=[graph],
+                options=[{**self._options, "check_split_callback": is_earlier}],
+            )
+            preferred = min(matches, key=lambda m: earlier[m.second_map_entry], default=None)
+            if preferred is not None:
+                return preferred.apply(graph, sdfg)
+        return super().apply(graph, sdfg)
 
 
 def _check_shared_output_options(
