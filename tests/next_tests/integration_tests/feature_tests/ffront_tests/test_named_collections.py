@@ -722,6 +722,7 @@ def _split_at_bound_ref(a: np.ndarray, bounds: NestedBounds) -> np.ndarray:
 
 @pytest.mark.uses_tuple_args
 @pytest.mark.uses_concat_where
+@pytest.mark.uses_scalar_in_domain
 def test_nested_named_tuple_as_field_operator_arg(cartesian_case):
     bounds = _nested_bounds(cartesian_case)
     a = cases.allocate(cartesian_case, nested_bounds_as_field_operator_arg_program, "a")()
