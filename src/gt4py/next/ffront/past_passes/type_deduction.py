@@ -47,6 +47,21 @@ def _ensure_no_closure_var_access(
         )
 
 
+def _contains_sliced_field(expr: past.Expr) -> bool:
+    if isinstance(expr, past.TupleExpr):
+        return any(_contains_sliced_field(elt) for elt in expr.elts)
+    return isinstance(expr, past.Subscript) and isinstance(expr.value.type, ts.FieldType)
+
+
+def _is_tuple_like(type_: ts.NamedCollectionType) -> bool:
+    try:
+        python_type = pkgutil.resolve_name(type_.original_python_type)
+    except (ValueError, ImportError, AttributeError):
+        # e.g. a class defined in a function (`mod:f.<locals>.C`) can not be resolved by name
+        return True
+    return isinstance(python_type, type) and issubclass(python_type, tuple)
+
+
 def _is_integral_scalar(expr: past.Expr) -> bool:
     """Check that expression is an integral scalar."""
     return isinstance(expr.type, ts.ScalarType) and type_info.is_integral(expr.type)
@@ -162,9 +177,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         new_type = value.type
         if isinstance(value.type, (ts.TupleType, ts.NamedCollectionType)):
             _ensure_no_closure_var_access(value, node.location, kwargs["closure_var_ids"])
-            if isinstance(value.type, ts.NamedCollectionType) and not issubclass(
-                pkgutil.resolve_name(value.type.original_python_type), tuple
-            ):
+            if isinstance(value.type, ts.NamedCollectionType) and not _is_tuple_like(value.type):
                 raise errors.DSLError(
                     node.location,
                     f"Elements of '{value.type}' can only be accessed by attribute, not by index.",
@@ -178,6 +191,10 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
                     f"[0, {len(value.type.types)}), got '{node.slice_}'.",
                 )
             new_type = value.type.types[index]
+        elif not isinstance(value.type, ts.FieldType):
+            raise errors.DSLError(
+                node.location, f"Values of type '{value.type}' can not be subscripted."
+            )
         return past.Subscript(value=value, slice_=slice_, type=new_type, location=node.location)
 
     def visit_Attribute(self, node: past.Attribute, **kwargs: Any) -> past.Attribute:
@@ -273,6 +290,12 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
             if is_operator:
                 _validate_operator_call(new_func, new_kwargs)
+                inputs = [
+                    *new_args,
+                    *(v for k, v in new_kwargs.items() if k not in ["out", "domain"]),
+                ]
+                if any(_contains_sliced_field(arg) for arg in inputs):
+                    raise ValueError("Only the 'out' argument can be sliced.")
             arg_types = [arg.type for arg in new_args]
             kwarg_types = {
                 name: expr.type

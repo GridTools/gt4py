@@ -323,9 +323,19 @@ def _closure_tuple_index(in_field: _InField, out: _InField):
     _identity(in_field, out=out, domain={IDim: (CLOSURE_TUPLE[0], CLOSURE_TUPLE[1])})
 
 
+def _scalar_index(in_field: _InField, out: _InField, s: gtx.int32):
+    _identity(in_field, out=out, domain={IDim: (0, s[0])})
+
+
+def _sliced_input(in_field: _InField, out: _InField):
+    _identity(in_field[1:3], out=out)
+
+
 @pytest.mark.parametrize(
     "program, message",
     [
+        (_scalar_index, "can not be subscripted"),
+        (_sliced_input, "Only the 'out' argument can be sliced"),
         (_non_literal_index, "Tuples need to be indexed with literal integers"),
         (_out_of_range_index, "Tuples need to be indexed with literal integers"),
         (_negative_index, "Tuples need to be indexed with literal integers"),
@@ -345,6 +355,21 @@ def test_named_tuple_attributes_named_like_type_spec_fields(identity_def):
 
     def program(in_field: _InField, out: _InField, d: SpecialKeysNamedTuple):
         identity(in_field, out=out, domain={IDim: (d.types, d.keys)})
+
+    past_node = ProgramParser.apply_to_function(program)
+
+    lower, upper = past_node.body[0].kwargs["domain"].values_[0].elts
+    assert lower.type == ts.ScalarType(kind=ts.ScalarKind.INT32)
+    assert upper.type == ts.ScalarType(kind=ts.ScalarKind.INT64)
+
+
+def test_locally_defined_named_tuple_subscript():
+    class LocalNamedTuple(NamedTuple):
+        lower: gtx.int32
+        upper: gtx.int64
+
+    def program(in_field: _InField, out: _InField, d: LocalNamedTuple):
+        _identity(in_field, out=out, domain={IDim: (d[0], d[1])})
 
     past_node = ProgramParser.apply_to_function(program)
 
