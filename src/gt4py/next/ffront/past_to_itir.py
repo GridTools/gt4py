@@ -513,7 +513,12 @@ class ProgramLowering(
 
     def visit_Attribute(self, node: past.Attribute, **kwargs: Any) -> itir.FunCall:
         named_tup_type = node.value.type
-        assert isinstance(named_tup_type, ts.NamedCollectionType)
+        if not isinstance(named_tup_type, ts.NamedCollectionType):
+            raise errors.DSLError(
+                node.location,
+                "Only attributes of named collections, enums and constant namespaces are "
+                "supported in compiled programs.",
+            )
         return im.tuple_get(named_tup_type.keys.index(node.attr), self.visit(node.value, **kwargs))
 
     def visit_Subscript(self, node: past.Subscript, **kwargs: Any) -> itir.FunCall:

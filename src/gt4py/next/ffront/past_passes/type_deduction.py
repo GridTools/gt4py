@@ -5,6 +5,7 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import enum
 import pkgutil
 from typing import Any, Optional, cast
 
@@ -15,7 +16,7 @@ from gt4py.next.ffront import (
     program_ast as past,
     type_specifications as ts_ffront,
 )
-from gt4py.next.type_system import type_info, type_specifications as ts
+from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
 
 
 def _ensure_no_sliced_field(entry: past.Expr) -> None:
@@ -197,8 +198,29 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
         return past.Subscript(value=value, slice_=slice_, type=new_type, location=node.location)
 
-    def visit_Attribute(self, node: past.Attribute, **kwargs: Any) -> past.Attribute:
+    def visit_Attribute(
+        self, node: past.Attribute, **kwargs: Any
+    ) -> past.Attribute | past.Constant:
         new_value = self.visit(node.value, **kwargs)
+        if isinstance(new_value.type, type_translation.NamespaceProxy):
+            namespace = new_value.type._object
+            if not hasattr(namespace, node.attr):
+                raise errors.MissingAttributeError(node.location, node.attr)
+            member = getattr(namespace, node.attr)
+            if isinstance(namespace, type_translation.ConstantPythonNamespaceObject) and not (
+                isinstance(member, type_translation.PythonNamespaceObject)
+            ):
+                if isinstance(member, enum.Enum):
+                    member = member.value
+                return past.Constant(
+                    value=member, type=type_translation.from_value(member), location=node.location
+                )
+            return past.Attribute(
+                value=new_value,
+                attr=node.attr,
+                location=node.location,
+                type=type_translation.from_value(member),
+            )
         # look up via `keys`: `getattr` on the type would resolve e.g. `keys` or `types`
         # to the attributes of the type itself
         if not (

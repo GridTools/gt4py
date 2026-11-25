@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import dataclasses
+import enum
 import re
 from typing import NamedTuple
 
@@ -376,3 +377,14 @@ def test_locally_defined_named_tuple_subscript():
     lower, upper = past_node.body[0].kwargs["domain"].values_[0].elts
     assert lower.type == ts.ScalarType(kind=ts.ScalarKind.INT32)
     assert upper.type == ts.ScalarType(kind=ts.ScalarKind.INT64)
+
+
+def test_missing_enum_member():
+    class Bounds(enum.IntEnum):
+        LOWER = 0
+
+    def program(in_field: _InField, out: _InField):
+        _identity(in_field, out=out, domain={IDim: (Bounds.LOWER, Bounds.UPPER)})
+
+    with pytest.raises(errors.MissingAttributeError, match="'UPPER'"):
+        ProgramParser.apply_to_function(program)
