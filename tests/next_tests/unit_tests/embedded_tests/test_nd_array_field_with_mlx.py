@@ -175,6 +175,30 @@ def test_float64_on_gpu_raises(gpu_default):
             create()
 
 
+def test_sum_to_float64_on_gpu_raises(gpu_default):
+    with pytest.raises(TypeError, match="float64"):
+        xp.sum(xp.ones((2,), dtype=mx.float32), dtype=mx.float64)
+
+
+def test_ones_in_float64_on_gpu_raises(gpu_default):
+    with pytest.raises(TypeError, match="float64"):
+        xp.ones((2,))
+
+
+def test_full_with_array_fill_value_keeps_its_dtype():
+    result = xp.full((2,), xp.asarray(np.float64(0.1)))
+
+    assert result.dtype == mx.float64
+    np.testing.assert_array_equal(np.array(result), np.full((2,), 0.1))
+
+
+def test_astype_without_copy_returns_array_of_same_dtype():
+    array = xp.ones((2,), dtype=mx.float32)
+
+    assert xp.astype(array, mx.float32, copy=False) is array
+    assert xp.astype(array, mx.float32) is not array
+
+
 def test_float64_on_cpu_stream_is_allowed(gpu_default):
     # an explicit CPU device overrides the default device
     assert xp.zeros((2,), dtype=mx.float64, device=mx.cpu).dtype == mx.float64

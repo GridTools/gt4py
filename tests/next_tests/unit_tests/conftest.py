@@ -144,12 +144,11 @@ def asarray(xp: ModuleType, data, dtype=None):
         return xp.asarray(data)
     name = np.dtype(dtype).name
     if is_mlx(xp):
-        # converted by NumPy and copied: with Metal, `mlx.core.asarray` shares the memory of
-        # NumPy data and reinterprets its bytes; MLX names the boolean dtype only `bool_`
-        return xp.array(
-            np.asarray(data, dtype=dtype),
-            dtype=getattr(xp, name) if hasattr(xp, name) else getattr(xp, f"{name}_"),
-        )
+        # the namespace of `gt4py.next` for MLX: `mlx.core.asarray` shares the memory of NumPy
+        # data and reinterprets its bytes with Metal, and names the boolean dtype only `bool_`
+        from gt4py.next.embedded.array_libraries import _mlx_namespace
+
+        return _mlx_namespace.asarray(data, dtype=getattr(_mlx_namespace, name))
     return xp.asarray(data, dtype=getattr(xp, name))
 
 

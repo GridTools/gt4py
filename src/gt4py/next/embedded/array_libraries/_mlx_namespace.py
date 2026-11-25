@@ -114,6 +114,7 @@ def _creation_dtype(dtype: Any, device: Any) -> Any:
 
 
 def empty(shape: int | Sequence[int], *, dtype: Any = None, device: Any = None) -> mx.array:
+    # MLX has no uninitialized arrays: `mx.empty` is `mx.zeros`
     return mx.zeros(shape, _creation_dtype(dtype, device), stream=_stream(device))
 
 
@@ -174,7 +175,7 @@ def sum(  # noqa: A001 # the standard's name
 ) -> mx.array:
     # MLX reduces in the dtype of `x` (integers narrower than 32 bits in int32), then casts
     result = mx.sum(x, axis=axis, keepdims=keepdims)
-    return result if dtype is None or result.dtype == dtype else mx.astype(result, dtype)
+    return result if dtype is None else astype(result, dtype, copy=False)
 
 
 def nonzero(x: mx.array, /) -> tuple[mx.array, ...]:
