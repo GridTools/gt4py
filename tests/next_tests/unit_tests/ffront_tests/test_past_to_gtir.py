@@ -211,6 +211,28 @@ def test_named_collection_attribute_in_domain(identity_def, gtir_identity_fundef
     )
 
 
+def test_tuple_subscript_in_domain(identity_def, gtir_identity_fundef):
+    identity = gtx.field_operator(identity_def)
+
+    def program(
+        in_field: gtx.Field[[IDim], float64],
+        out: gtx.Field[[IDim], float64],
+        t: tuple[gtx.int32, tuple[gtx.int32, gtx.int32]],
+    ):
+        identity(in_field, out=out, domain={IDim: (t[0], t[1][1])})
+
+    itir_node = ProgramLowering.apply(
+        ProgramParser.apply_to_function(program),
+        function_definitions=[gtir_identity_fundef],
+        grid_type=gtx.GridType.CARTESIAN,
+    )
+
+    assert itir_node.body[0].domain == im.domain(
+        gtx.GridType.CARTESIAN,
+        {IDim: (im.tuple_get(0, "t"), im.tuple_get(1, im.tuple_get(1, "t")))},
+    )
+
+
 make_tuple_op_definition = itir.FunctionDefinition(
     id="make_tuple_op", params=[itir.Sym(id="inp")], expr=im.make_tuple("inp", "inp")
 )

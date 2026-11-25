@@ -251,3 +251,35 @@ def test_domain_exception_6(identity_def):
     assert exc_info.match("Invalid call to 'domain_format_6'")
 
     assert re.search("Empty domain not allowed.", exc_info.value.__cause__.args[0]) is not None
+
+
+def test_tuple_subscript_type(identity_def):
+    identity = gtx.field_operator(identity_def)
+
+    def program(
+        in_field: gtx.Field[[IDim], float64],
+        out: gtx.Field[[IDim], float64],
+        t: tuple[tuple[gtx.int32, gtx.int64], gtx.int32],
+    ):
+        identity(in_field, out=out, domain={IDim: (t[1], t[0][1])})
+
+    past_node = ProgramParser.apply_to_function(program)
+
+    lower, upper = past_node.body[0].kwargs["domain"].values_[0].elts
+    assert lower.type == ts.ScalarType(kind=ts.ScalarKind.INT32)
+    assert upper.type == ts.ScalarType(kind=ts.ScalarKind.INT64)
+
+
+def test_tuple_subscript_with_non_literal_index(identity_def):
+    identity = gtx.field_operator(identity_def)
+
+    def program(
+        in_field: gtx.Field[[IDim], float64],
+        out: gtx.Field[[IDim], float64],
+        t: tuple[gtx.int32, gtx.int32],
+        i: gtx.int32,
+    ):
+        identity(in_field, out=out, domain={IDim: (t[i], t[1])})
+
+    with pytest.raises(errors.DSLError, match="Tuples need to be indexed with literal integers"):
+        ProgramParser.apply_to_function(program)

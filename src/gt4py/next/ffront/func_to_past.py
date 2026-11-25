@@ -194,7 +194,7 @@ class ProgramParser(DialectParser[past.Program]):
             raise errors.DSLError(
                 self.get_location(node), "`node.ctx` can only be of type ast.Load"
             )
-        assert isinstance(node.value, (ast.Name, ast.Attribute))
+        assert isinstance(node.value, (ast.Name, ast.Attribute, ast.Subscript))
 
         return past.Attribute(
             attr=node.attr,

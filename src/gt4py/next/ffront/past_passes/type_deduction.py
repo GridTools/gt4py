@@ -142,12 +142,16 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def visit_Subscript(self, node: past.Subscript, **kwargs: Any) -> past.Subscript:
         value = self.visit(node.value, **kwargs)
-        return past.Subscript(
-            value=value,
-            slice_=self.visit(node.slice_, **kwargs),
-            type=value.type,
-            location=node.location,
-        )
+        slice_ = self.visit(node.slice_, **kwargs)
+        new_type = value.type
+        if isinstance(value.type, (ts.TupleType, ts.NamedCollectionType)):
+            if not (isinstance(slice_, past.Constant) and isinstance(slice_.value, int)):
+                raise errors.DSLError(
+                    node.location,
+                    f"Tuples need to be indexed with literal integers, got '{node.slice_}'.",
+                )
+            new_type = value.type.types[slice_.value]
+        return past.Subscript(value=value, slice_=slice_, type=new_type, location=node.location)
 
     def visit_Attribute(self, node: past.Attribute, **kwargs: Any) -> past.Attribute:
         new_value = self.visit(node.value, **kwargs)

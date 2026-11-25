@@ -186,7 +186,7 @@ def _column_axis(all_closure_vars: dict[str, Any]) -> Optional[common.Dimension]
 
 
 def _compute_field_slice(node: past.Subscript) -> list[past.Slice]:
-    out_field_name: past.Name = node.value
+    out_field_name = node.value
     out_field_slice_: list[past.Slice]
     if isinstance(node.slice_, past.TupleExpr) and all(
         isinstance(el, past.Slice) for el in node.slice_.elts
@@ -445,6 +445,7 @@ class ProgramLowering(
         self, field: past.Name | past.Subscript
     ) -> tuple[past.Name, list[past.Slice] | None]:
         if isinstance(field, past.Subscript):
+            assert isinstance(field.value, past.Name)
             return field.value, _compute_field_slice(field)
         else:
             assert isinstance(field, past.Name)
@@ -514,6 +515,11 @@ class ProgramLowering(
         named_tup_type = node.value.type
         assert isinstance(named_tup_type, ts.NamedCollectionType)
         return im.tuple_get(named_tup_type.keys.index(node.attr), self.visit(node.value, **kwargs))
+
+    def visit_Subscript(self, node: past.Subscript, **kwargs: Any) -> itir.FunCall:
+        assert isinstance(node.value.type, (ts.TupleType, ts.NamedCollectionType))
+        assert isinstance(node.slice_, past.Constant)
+        return im.tuple_get(node.slice_.value, self.visit(node.value, **kwargs))
 
     def visit_BinOp(self, node: past.BinOp, **kwargs: Any) -> itir.FunCall:
         return itir.FunCall(
