@@ -5,9 +5,10 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
+import pkgutil
 from typing import Any, Optional, cast
 
-from gt4py.eve import NodeTranslator, traits
+from gt4py.eve import NodeTranslator, SourceLocation, traits
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
@@ -30,6 +31,20 @@ def _ensure_no_sliced_field(entry: past.Expr) -> None:
     elif isinstance(entry, past.TupleExpr):
         for param in entry.elts:
             _ensure_no_sliced_field(param)
+
+
+def _ensure_no_closure_var_access(
+    value: past.Expr, location: SourceLocation, closure_var_ids: set[str]
+) -> None:
+    root = value
+    while isinstance(root, (past.Subscript, past.Attribute)):
+        root = root.value
+    if isinstance(root, past.Name) and root.id in closure_var_ids:
+        raise errors.DSLError(
+            location,
+            f"Elements of closure variable '{root.id}' can not be accessed in a program, "
+            "pass it as a program argument instead.",
+        )
 
 
 def _is_integral_scalar(expr: past.Expr) -> bool:
@@ -115,6 +130,7 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def visit_Program(self, node: past.Program, **kwargs: Any) -> past.Program:
         params = self.visit(node.params, **kwargs)
+        kwargs["closure_var_ids"] = {str(sym.id) for sym in node.closure_vars}
 
         definition_type = ts.FunctionType(
             pos_only_args=[],
@@ -145,21 +161,41 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         slice_ = self.visit(node.slice_, **kwargs)
         new_type = value.type
         if isinstance(value.type, (ts.TupleType, ts.NamedCollectionType)):
-            if not (isinstance(slice_, past.Constant) and isinstance(slice_.value, int)):
+            _ensure_no_closure_var_access(value, node.location, kwargs["closure_var_ids"])
+            if isinstance(value.type, ts.NamedCollectionType) and not issubclass(
+                pkgutil.resolve_name(value.type.original_python_type), tuple
+            ):
                 raise errors.DSLError(
                     node.location,
-                    f"Tuples need to be indexed with literal integers, got '{node.slice_}'.",
+                    f"Elements of '{value.type}' can only be accessed by attribute, not by index.",
                 )
-            new_type = value.type.types[slice_.value]
+            index = slice_.value if isinstance(slice_, past.Constant) else None
+            # `type(...) is int` rejects `bool`
+            if type(index) is not int or not 0 <= index < len(value.type.types):
+                raise errors.DSLError(
+                    node.location,
+                    f"Tuples need to be indexed with literal integers in "
+                    f"[0, {len(value.type.types)}), got '{node.slice_}'.",
+                )
+            new_type = value.type.types[index]
         return past.Subscript(value=value, slice_=slice_, type=new_type, location=node.location)
 
     def visit_Attribute(self, node: past.Attribute, **kwargs: Any) -> past.Attribute:
         new_value = self.visit(node.value, **kwargs)
+        # look up via `keys`: `getattr` on the type would resolve e.g. `keys` or `types`
+        # to the attributes of the type itself
+        if not (
+            isinstance(new_value.type, ts.NamedCollectionType) and node.attr in new_value.type.keys
+        ):
+            raise errors.DSLError(
+                node.location, f"'{new_value.type}' has no attribute '{node.attr}'."
+            )
+        _ensure_no_closure_var_access(new_value, node.location, kwargs["closure_var_ids"])
         return past.Attribute(
             value=new_value,
             attr=node.attr,
             location=node.location,
-            type=getattr(new_value.type, node.attr),
+            type=new_value.type.types[new_value.type.keys.index(node.attr)],
         )
 
     def visit_Dict(self, node: past.Dict, **kwargs: Any) -> past.Dict:

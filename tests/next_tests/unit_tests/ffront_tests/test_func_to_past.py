@@ -6,7 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import dataclasses
 import re
+from typing import NamedTuple
 
 import pytest
 
@@ -270,16 +272,82 @@ def test_tuple_subscript_type(identity_def):
     assert upper.type == ts.ScalarType(kind=ts.ScalarKind.INT64)
 
 
-def test_tuple_subscript_with_non_literal_index(identity_def):
+class SpecialKeysNamedTuple(NamedTuple):
+    types: gtx.int32
+    keys: gtx.int64
+
+
+@dataclasses.dataclass
+class BoundsDataclass:
+    lower: gtx.int32
+    upper: gtx.int32
+
+
+CLOSURE_TUPLE = (gtx.int32(0), gtx.int32(1))
+
+_InField = gtx.Field[[IDim], float64]
+
+
+@gtx.field_operator
+def _identity(x: _InField) -> _InField:
+    return x
+
+
+def _non_literal_index(
+    in_field: _InField, out: _InField, t: tuple[gtx.int32, gtx.int32], i: gtx.int32
+):
+    _identity(in_field, out=out, domain={IDim: (t[i], t[1])})
+
+
+def _out_of_range_index(in_field: _InField, out: _InField, t: tuple[gtx.int32, gtx.int32]):
+    _identity(in_field, out=out, domain={IDim: (t[0], t[2])})
+
+
+def _negative_index(in_field: _InField, out: _InField, t: tuple[gtx.int32, gtx.int32]):
+    _identity(in_field, out=out, domain={IDim: (t[0], t[-1])})
+
+
+def _bool_index(in_field: _InField, out: _InField, t: tuple[gtx.int32, gtx.int32]):
+    _identity(in_field, out=out, domain={IDim: (t[False], t[True])})
+
+
+def _dataclass_index(in_field: _InField, out: _InField, d: BoundsDataclass):
+    _identity(in_field, out=out, domain={IDim: (d[0], d[1])})
+
+
+def _unknown_attribute(in_field: _InField, out: _InField, d: SpecialKeysNamedTuple):
+    _identity(in_field, out=out, domain={IDim: (d.types, d.upper)})
+
+
+def _closure_tuple_index(in_field: _InField, out: _InField):
+    _identity(in_field, out=out, domain={IDim: (CLOSURE_TUPLE[0], CLOSURE_TUPLE[1])})
+
+
+@pytest.mark.parametrize(
+    "program, message",
+    [
+        (_non_literal_index, "Tuples need to be indexed with literal integers"),
+        (_out_of_range_index, "Tuples need to be indexed with literal integers"),
+        (_negative_index, "Tuples need to be indexed with literal integers"),
+        (_bool_index, "Tuples need to be indexed with literal integers"),
+        (_dataclass_index, "can only be accessed by attribute"),
+        (_unknown_attribute, "has no attribute 'upper'"),
+        (_closure_tuple_index, "closure variable 'CLOSURE_TUPLE'"),
+    ],
+)
+def test_invalid_collection_element_access(program, message):
+    with pytest.raises(errors.DSLError, match=message):
+        ProgramParser.apply_to_function(program)
+
+
+def test_named_tuple_attributes_named_like_type_spec_fields(identity_def):
     identity = gtx.field_operator(identity_def)
 
-    def program(
-        in_field: gtx.Field[[IDim], float64],
-        out: gtx.Field[[IDim], float64],
-        t: tuple[gtx.int32, gtx.int32],
-        i: gtx.int32,
-    ):
-        identity(in_field, out=out, domain={IDim: (t[i], t[1])})
+    def program(in_field: _InField, out: _InField, d: SpecialKeysNamedTuple):
+        identity(in_field, out=out, domain={IDim: (d.types, d.keys)})
 
-    with pytest.raises(errors.DSLError, match="Tuples need to be indexed with literal integers"):
-        ProgramParser.apply_to_function(program)
+    past_node = ProgramParser.apply_to_function(program)
+
+    lower, upper = past_node.body[0].kwargs["domain"].values_[0].elts
+    assert lower.type == ts.ScalarType(kind=ts.ScalarKind.INT32)
+    assert upper.type == ts.ScalarType(kind=ts.ScalarKind.INT64)
