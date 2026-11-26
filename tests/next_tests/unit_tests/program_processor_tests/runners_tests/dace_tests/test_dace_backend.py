@@ -136,11 +136,9 @@ def test_make_backend(auto_optimize, device_type, monkeypatch):
             mock_auto_optimize.assert_called_once_with(
                 sdfg,
                 gpu=on_gpu,
-                constant_symbols={
-                    "__a_IDim_stride": 1,
-                    "__b_IDim_stride": 1,
-                    "__out_IDim_stride": 1,
-                },
+                # `testee` is a cartesian program: the horizontal strides are not set
+                #  to 1, although `unstructured_horizontal_has_unit_stride` is enabled.
+                constant_symbols={},
                 transient_memory_mode=optimization_args["transient_memory_mode"],
                 gpu_block_size=optimization_args["gpu_block_size"],
                 gpu_block_size_2d=optimization_args["gpu_block_size_2d"],
