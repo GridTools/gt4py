@@ -9,14 +9,17 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Any, Final, Optional
+import re
+from typing import Any, Final, Mapping, Optional
 
 import numpy as np
 
+from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
-from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator import builtins as itir_builtins, ir as itir
+from gt4py.next.iterator.ir_utils import misc as ir_utils_misc
 from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
@@ -26,6 +29,68 @@ from gt4py.next.type_system import type_specifications as ts, type_translation
 
 
 GENERATED_CONNECTIVITY_PARAM_PREFIX = "gt_conn_"
+
+_NON_IDENTIFIER_CHARS: Final = re.compile(r"[^A-Za-z0-9_]+")
+
+
+def _is_valid_cpp_identifier(name: str) -> bool:
+    # For ASCII strings the identifier grammars of Python and C++ coincide (keywords aside).
+    return name.isascii() and name.isidentifier()
+
+
+class _RenameSymbols(eve.PreserveLocationVisitor, eve.NodeTranslator):
+    PRESERVED_ANNEX_ATTRS = ("type", "recorded_shifts", "domain")
+
+    def visit_Sym(self, node: itir.Sym, *, name_map: Mapping[str, str]) -> itir.Sym:
+        if (new_id := name_map.get(str(node.id))) is None:
+            return node
+        return itir.Sym(id=new_id, type=node.type)
+
+    def visit_SymRef(self, node: itir.SymRef, *, name_map: Mapping[str, str]) -> itir.SymRef:
+        if (new_id := name_map.get(str(node.id))) is None:
+            return node
+        return itir.SymRef(id=new_id, type=node.type)
+
+
+def replace_invalid_symbols(program: itir.Program) -> itir.Program:
+    """
+    Rename the symbols of `program` whose names are not valid C++ identifiers.
+
+    The SSA pass of the frontend separates a variable name from its assignment counter
+    with the non-ASCII character U+141E, e.g. `tmp` becomes `tmp\u141e0`. Emitted verbatim,
+    such a name requires a compiler that accepts extended characters in identifiers, which
+    e.g. GCC < 10 does not.
+
+    Every invalid character sequence is replaced by an underscore (`tmp_0`), and trailing
+    underscores are appended where needed to keep the new name distinct from all names in
+    the program. Symbols are visited in sorted order, so the renaming is deterministic.
+
+    The parameters of the program are left as they are: the SSA pass does not produce
+    them, and they also name the parameters of the generated entry point.
+
+    Returns:
+        A copy of `program` with the invalid symbols renamed, or `program` itself if all
+        symbol names are valid C++ identifiers.
+    """
+    sym_names = {str(sym.id) for sym in eve.walk_values(program).if_isinstance(itir.Sym)}
+    param_names = {str(param.id) for param in program.params}
+    invalid_names = sorted(
+        name for name in sym_names - param_names if not _is_valid_cpp_identifier(name)
+    )
+    if not invalid_names:
+        return program
+
+    # also covers the names of temporaries, function definitions and the program itself
+    reserved_names = {
+        str(name) for name in eve.walk_values(program).if_isinstance(eve.SymbolName)
+    } | set(itir_builtins.BUILTINS)
+    name_map: dict[str, str] = {}
+    for name in invalid_names:
+        new_name = ir_utils_misc.unique_symbol(_NON_IDENTIFIER_CHARS.sub("_", name), reserved_names)
+        reserved_names.add(new_name)
+        name_map[name] = new_name
+
+    return _RenameSymbols().visit(program, name_map=name_map)
 
 
 def get_param_description(name: str, type_: Any) -> interface.Parameter:
@@ -164,6 +229,9 @@ class GTFNTranslationStep(
         else:
             assert isinstance(program, itir.Program)
             new_program = program
+
+        # Names produced by the frontend's SSA pass are not valid C++ identifiers.
+        new_program = replace_invalid_symbols(new_program)
 
         gtfn_ir = GTFN_lowering.apply(
             new_program,
