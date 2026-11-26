@@ -9,6 +9,7 @@ import pytest
 
 from gt4py.next import common, utils
 from gt4py.next.iterator.ir_utils import ir_makers as im
+from gt4py.next.iterator.transforms import inline_lambdas
 from gt4py.next.iterator.transforms.collapse_tuple import CollapseTuple
 from gt4py.next.iterator.type_system import type_specifications as it_ts
 from gt4py.next.type_system import type_specifications as ts
@@ -472,3 +473,68 @@ def test_flatten_as_fieldop_args_scan(uids: utils.IDGeneratorPool):
         uids=uids,
     )
     assert actual == expected
+
+
+def test_flatten_as_fieldop_args_no_capture_of_remapped_args(uids: utils.IDGeneratorPool):
+    # The first application flattens `d` one level and keeps the `let` binding it, the second
+    # flattens `d[0]` inside that `let`. Reusing the name of the outer binding there would
+    # capture the passed-through `d[1]`.
+    d_type = ts.TupleType(types=[ts.TupleType(types=[int_type, int_type]), int_type])
+    testee = im.as_fieldop(im.lambda_("d")(im.tuple_get(1, im.deref("d"))))(im.ref("d", d_type))
+    expected = im.as_fieldop(
+        im.lambda_("__ct_flat_el_0_0_d", "__ct_flat_el_0_1_d", "__ct_flat_el_1_d")(
+            im.tuple_get(
+                1,
+                im.make_tuple(
+                    im.make_tuple(im.deref("__ct_flat_el_0_0_d"), im.deref("__ct_flat_el_0_1_d")),
+                    im.deref("__ct_flat_el_1_d"),
+                ),
+            )
+        )
+    )(
+        im.tuple_get(0, im.tuple_get(0, "d")),
+        im.tuple_get(1, im.tuple_get(0, "d")),
+        im.tuple_get(1, "d"),
+    )
+
+    actual = testee
+    for _ in range(2):
+        actual = CollapseTuple.apply(
+            actual,
+            remove_letified_make_tuple_elements=False,
+            enabled_transformations=CollapseTuple.Transformation.FLATTEN_AS_FIELDOP_ARGS,
+            allow_undeclared_symbols=True,
+            within_stencil=False,
+            uids=uids,
+        )
+    actual = inline_lambdas.InlineLambdas.apply(actual)
+    assert actual == expected
+
+
+def test_flatten_as_fieldop_args_identical_subtrees_transformed_equally(
+    uids: utils.IDGeneratorPool,
+):
+    # The tuple argument is a non-trivial `as_fieldop`, so the `let` binding it survives and the
+    # remapped-argument names appear in the result. Both occurrences of the subtree must get the
+    # same names, or CSE could not merge them afterwards.
+    def subtree():
+        return im.as_fieldop(
+            im.lambda_("it")(
+                im.plus(im.tuple_get(0, im.deref("it")), im.tuple_get(1, im.deref("it")))
+            )
+        )(
+            im.as_fieldop(im.lambda_("x")(im.make_tuple(im.deref("x"), im.deref("x"))))(
+                im.ref("a", int_type)
+            )
+        )
+
+    testee = im.make_tuple(subtree(), subtree())
+    actual = CollapseTuple.apply(
+        testee,
+        enabled_transformations=CollapseTuple.Transformation.FLATTEN_AS_FIELDOP_ARGS,
+        allow_undeclared_symbols=True,
+        within_stencil=False,
+        uids=uids,
+    )
+    assert actual.args[0] != subtree()  # the transformation applied
+    assert actual.args[0] == actual.args[1]
