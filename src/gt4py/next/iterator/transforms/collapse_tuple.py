@@ -584,13 +584,15 @@ class CollapseTuple(
         ] = {}  # contains the arguments that are remapped, e.g. `{a, b}`
         new_params: list[itir.Sym] = []
         new_args: list[itir.Expr] = []
+        reserved_names = set(symbol_ref_utils.collect_symbol_refs(node))
         for param, arg in zip(stencil.params, node.args, strict=True):
             if isinstance(arg.type, ts.TupleType):
                 assert isinstance(param.type, it_ts.IteratorType)
-                ref_to_remapped_arg = im.ref(
-                    f"__ct_flat_remapped_{len(remapped_args)}",
-                    arg.type,
+                remapped_arg_name = ir_misc.unique_symbol(
+                    f"__ct_flat_remapped_{len(remapped_args)}", reserved_names
                 )
+                reserved_names.add(remapped_arg_name)
+                ref_to_remapped_arg = im.ref(remapped_arg_name, arg.type)
                 self._preserve_annex(arg, ref_to_remapped_arg)
                 remapped_args[im.sym(ref_to_remapped_arg.id, arg.type)] = arg
                 new_params_inner, lift_params = [], []
