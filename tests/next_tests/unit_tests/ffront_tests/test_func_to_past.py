@@ -6,8 +6,6 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
-import dataclasses
-import enum
 import re
 from typing import NamedTuple
 
@@ -273,19 +271,6 @@ def test_tuple_subscript_type(identity_def):
     assert upper.type == ts.ScalarType(kind=ts.ScalarKind.INT64)
 
 
-class SpecialKeysNamedTuple(NamedTuple):
-    types: gtx.int32
-    keys: gtx.int64
-
-
-@dataclasses.dataclass
-class BoundsDataclass:
-    lower: gtx.int32
-    upper: gtx.int32
-
-
-CLOSURE_TUPLE = (gtx.int32(0), gtx.int32(1))
-
 _InField = gtx.Field[[IDim], float64]
 
 
@@ -312,56 +297,23 @@ def _bool_index(in_field: _InField, out: _InField, t: tuple[gtx.int32, gtx.int32
     _identity(in_field, out=out, domain={IDim: (t[False], t[True])})
 
 
-def _dataclass_index(in_field: _InField, out: _InField, d: BoundsDataclass):
-    _identity(in_field, out=out, domain={IDim: (d[0], d[1])})
-
-
-def _unknown_attribute(in_field: _InField, out: _InField, d: SpecialKeysNamedTuple):
-    _identity(in_field, out=out, domain={IDim: (d.types, d.upper)})
-
-
-def _closure_tuple_index(in_field: _InField, out: _InField):
-    _identity(in_field, out=out, domain={IDim: (CLOSURE_TUPLE[0], CLOSURE_TUPLE[1])})
-
-
 def _scalar_index(in_field: _InField, out: _InField, s: gtx.int32):
     _identity(in_field, out=out, domain={IDim: (0, s[0])})
-
-
-def _sliced_input(in_field: _InField, out: _InField):
-    _identity(in_field[1:3], out=out)
 
 
 @pytest.mark.parametrize(
     "program, message",
     [
         (_scalar_index, "can not be subscripted"),
-        (_sliced_input, "Only the 'out' argument can be sliced"),
         (_non_literal_index, "Tuples need to be indexed with literal integers"),
         (_out_of_range_index, "Tuples need to be indexed with literal integers"),
         (_negative_index, "Tuples need to be indexed with literal integers"),
         (_bool_index, "Tuples need to be indexed with literal integers"),
-        (_dataclass_index, "can only be accessed by attribute"),
-        (_unknown_attribute, "has no attribute 'upper'"),
-        (_closure_tuple_index, "closure variable 'CLOSURE_TUPLE'"),
     ],
 )
 def test_invalid_collection_element_access(program, message):
     with pytest.raises(errors.DSLError, match=message):
         ProgramParser.apply_to_function(program)
-
-
-def test_named_tuple_attributes_named_like_type_spec_fields(identity_def):
-    identity = gtx.field_operator(identity_def)
-
-    def program(in_field: _InField, out: _InField, d: SpecialKeysNamedTuple):
-        identity(in_field, out=out, domain={IDim: (d.types, d.keys)})
-
-    past_node = ProgramParser.apply_to_function(program)
-
-    lower, upper = past_node.body[0].kwargs["domain"].values_[0].elts
-    assert lower.type == ts.ScalarType(kind=ts.ScalarKind.INT32)
-    assert upper.type == ts.ScalarType(kind=ts.ScalarKind.INT64)
 
 
 def test_locally_defined_named_tuple_subscript():
@@ -377,14 +329,3 @@ def test_locally_defined_named_tuple_subscript():
     lower, upper = past_node.body[0].kwargs["domain"].values_[0].elts
     assert lower.type == ts.ScalarType(kind=ts.ScalarKind.INT32)
     assert upper.type == ts.ScalarType(kind=ts.ScalarKind.INT64)
-
-
-def test_missing_enum_member():
-    class Bounds(enum.IntEnum):
-        LOWER = 0
-
-    def program(in_field: _InField, out: _InField):
-        _identity(in_field, out=out, domain={IDim: (Bounds.LOWER, Bounds.UPPER)})
-
-    with pytest.raises(errors.MissingAttributeError, match="'UPPER'"):
-        ProgramParser.apply_to_function(program)

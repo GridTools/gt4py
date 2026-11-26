@@ -516,8 +516,7 @@ class ProgramLowering(
         if not isinstance(named_tup_type, ts.NamedCollectionType):
             raise errors.DSLError(
                 node.location,
-                "Only attributes of named collections, enums and constant namespaces are "
-                "supported in compiled programs.",
+                "Only attributes of named collections are supported in compiled programs.",
             )
         return im.tuple_get(named_tup_type.keys.index(node.attr), self.visit(node.value, **kwargs))
 

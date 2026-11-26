@@ -5,18 +5,16 @@
 #
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
-import enum
-import pkgutil
 from typing import Any, Optional, cast
 
-from gt4py.eve import NodeTranslator, SourceLocation, traits
+from gt4py.eve import NodeTranslator, traits
 from gt4py.next import errors
 from gt4py.next.ffront import (
     dialect_ast_enums,
     program_ast as past,
     type_specifications as ts_ffront,
 )
-from gt4py.next.type_system import type_info, type_specifications as ts, type_translation
+from gt4py.next.type_system import type_info, type_specifications as ts
 
 
 def _ensure_no_sliced_field(entry: past.Expr) -> None:
@@ -32,35 +30,6 @@ def _ensure_no_sliced_field(entry: past.Expr) -> None:
     elif isinstance(entry, past.TupleExpr):
         for param in entry.elts:
             _ensure_no_sliced_field(param)
-
-
-def _ensure_no_closure_var_access(
-    value: past.Expr, location: SourceLocation, closure_var_ids: set[str]
-) -> None:
-    root = value
-    while isinstance(root, (past.Subscript, past.Attribute)):
-        root = root.value
-    if isinstance(root, past.Name) and root.id in closure_var_ids:
-        raise errors.DSLError(
-            location,
-            f"Elements of closure variable '{root.id}' can not be accessed in a program, "
-            "pass it as a program argument instead.",
-        )
-
-
-def _contains_sliced_field(expr: past.Expr) -> bool:
-    if isinstance(expr, past.TupleExpr):
-        return any(_contains_sliced_field(elt) for elt in expr.elts)
-    return isinstance(expr, past.Subscript) and isinstance(expr.value.type, ts.FieldType)
-
-
-def _is_tuple_like(type_: ts.NamedCollectionType) -> bool:
-    try:
-        python_type = pkgutil.resolve_name(type_.original_python_type)
-    except (ValueError, ImportError, AttributeError):
-        # e.g. a class defined in a function (`mod:f.<locals>.C`) can not be resolved by name
-        return True
-    return isinstance(python_type, type) and issubclass(python_type, tuple)
 
 
 def _is_integral_scalar(expr: past.Expr) -> bool:
@@ -146,7 +115,6 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
 
     def visit_Program(self, node: past.Program, **kwargs: Any) -> past.Program:
         params = self.visit(node.params, **kwargs)
-        kwargs["closure_var_ids"] = {str(sym.id) for sym in node.closure_vars}
 
         definition_type = ts.FunctionType(
             pos_only_args=[],
@@ -177,12 +145,6 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
         slice_ = self.visit(node.slice_, **kwargs)
         new_type = value.type
         if isinstance(value.type, (ts.TupleType, ts.NamedCollectionType)):
-            _ensure_no_closure_var_access(value, node.location, kwargs["closure_var_ids"])
-            if isinstance(value.type, ts.NamedCollectionType) and not _is_tuple_like(value.type):
-                raise errors.DSLError(
-                    node.location,
-                    f"Elements of '{value.type}' can only be accessed by attribute, not by index.",
-                )
             index = slice_.value if isinstance(slice_, past.Constant) else None
             # `type(...) is int` rejects `bool`
             if type(index) is not int or not 0 <= index < len(value.type.types):
@@ -198,43 +160,13 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
         return past.Subscript(value=value, slice_=slice_, type=new_type, location=node.location)
 
-    def visit_Attribute(
-        self, node: past.Attribute, **kwargs: Any
-    ) -> past.Attribute | past.Constant:
+    def visit_Attribute(self, node: past.Attribute, **kwargs: Any) -> past.Attribute:
         new_value = self.visit(node.value, **kwargs)
-        if isinstance(new_value.type, type_translation.NamespaceProxy):
-            namespace = new_value.type._object
-            if not hasattr(namespace, node.attr):
-                raise errors.MissingAttributeError(node.location, node.attr)
-            member = getattr(namespace, node.attr)
-            if isinstance(namespace, type_translation.ConstantPythonNamespaceObject) and not (
-                isinstance(member, type_translation.PythonNamespaceObject)
-            ):
-                if isinstance(member, enum.Enum):
-                    member = member.value
-                return past.Constant(
-                    value=member, type=type_translation.from_value(member), location=node.location
-                )
-            return past.Attribute(
-                value=new_value,
-                attr=node.attr,
-                location=node.location,
-                type=type_translation.from_value(member),
-            )
-        # look up via `keys`: `getattr` on the type would resolve e.g. `keys` or `types`
-        # to the attributes of the type itself
-        if not (
-            isinstance(new_value.type, ts.NamedCollectionType) and node.attr in new_value.type.keys
-        ):
-            raise errors.DSLError(
-                node.location, f"'{new_value.type}' has no attribute '{node.attr}'."
-            )
-        _ensure_no_closure_var_access(new_value, node.location, kwargs["closure_var_ids"])
         return past.Attribute(
             value=new_value,
             attr=node.attr,
             location=node.location,
-            type=new_value.type.types[new_value.type.keys.index(node.attr)],
+            type=getattr(new_value.type, node.attr),
         )
 
     def visit_Dict(self, node: past.Dict, **kwargs: Any) -> past.Dict:
@@ -312,12 +244,6 @@ class ProgramTypeDeduction(traits.VisitorWithSymbolTableTrait, NodeTranslator):
             )
             if is_operator:
                 _validate_operator_call(new_func, new_kwargs)
-                inputs = [
-                    *new_args,
-                    *(v for k, v in new_kwargs.items() if k not in ["out", "domain"]),
-                ]
-                if any(_contains_sliced_field(arg) for arg in inputs):
-                    raise ValueError("Only the 'out' argument can be sliced.")
             arg_types = [arg.type for arg in new_args]
             kwarg_types = {
                 name: expr.type
