@@ -32,6 +32,8 @@ from next_tests.integration_tests.cases_utils import (
     V2E,
     Edge,
     IDim,
+    JDim,
+    KDim,
     Vertex,
     skip_value_mesh,
 )
@@ -41,8 +43,6 @@ from dace import nodes as dace_nodes
 
 FLOAT_TYPE = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
 IFTYPE = ts.FieldType(dims=[IDim], dtype=FLOAT_TYPE)
-EFTYPE = ts.FieldType(dims=[Edge], dtype=FLOAT_TYPE)
-VFTYPE = ts.FieldType(dims=[Vertex], dtype=FLOAT_TYPE)
 
 
 @pytest.fixture(
@@ -79,15 +79,18 @@ def _translate_gtir_to_sdfg(
 
 @pytest.mark.parametrize("has_unit_stride", [False, True])
 @pytest.mark.parametrize("disable_field_origin", [False, True])
-def test_find_constant_symbols(has_unit_stride, disable_field_origin):
+def test_find_constant_symbols_unstructured(has_unit_stride, disable_field_origin):
+    """Unit stride must only be set on the horizontal dimension, not on the vertical one."""
     SKIP_VALUE_MESH = skip_value_mesh(None)
+    ekftype = ts.FieldType(dims=[Edge, KDim], dtype=FLOAT_TYPE)
+    vkftype = ts.FieldType(dims=[Vertex, KDim], dtype=FLOAT_TYPE)
 
     ir = itir.Program(
-        id="find_constant_symbols_sdfg",
+        id="find_constant_symbols_unstructured_sdfg",
         function_definitions=[],
         params=[
-            itir.Sym(id="x", type=EFTYPE),
-            itir.Sym(id="y", type=VFTYPE),
+            itir.Sym(id="x", type=ekftype),
+            itir.Sym(id="y", type=vkftype),
         ],
         declarations=[],
         body=[
@@ -95,7 +98,7 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
                 expr=im.as_fieldop(
                     im.lambda_("it")(im.reduce("plus", im.literal_from_value(1.0))(im.deref("it")))
                 )(im.as_fieldop_neighbors(V2E.value, "x")),
-                domain=im.get_field_domain(gtx_common.GridType.UNSTRUCTURED, "y", VFTYPE.dims),
+                domain=im.get_field_domain(gtx_common.GridType.UNSTRUCTURED, "y", vkftype.dims),
                 target=itir.SymRef(id="y"),
             )
         ],
@@ -119,6 +122,7 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
 
     expected = {}
     if has_unit_stride:
+        # The vertical dimension stride symbols must not be set to 1.
         expected |= {
             "__x_Edge_stride": 1,
             "__y_Vertex_stride": 1,
@@ -127,9 +131,49 @@ def test_find_constant_symbols(has_unit_stride, disable_field_origin):
     if disable_field_origin:
         expected |= {
             "__x_Edge_range_0": 0,
+            "__x_KDim_range_0": 0,
             "__y_Vertex_range_0": 0,
+            "__y_KDim_range_0": 0,
         }
     assert constant_symbols == expected
+
+
+def test_find_constant_symbols_cartesian():
+    """Unit stride must not be set on fields of a cartesian program."""
+    ir = itir.Program(
+        id="find_constant_symbols_cartesian_sdfg",
+        declarations=[],
+        function_definitions=[],
+        params=[
+            itir.Sym(id="x", type=ts.FieldType(dims=[IDim], dtype=FLOAT_TYPE)),
+            itir.Sym(id="y", type=ts.FieldType(dims=[IDim, JDim], dtype=FLOAT_TYPE)),
+        ],
+        body=[
+            itir.SetAt(
+                expr=im.op_as_fieldop("plus")("x", 1.0),
+                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", [IDim, JDim]),
+                target=itir.SymRef(id="y"),
+            ),
+        ],
+    )
+
+    sdfg = _translate_gtir_to_sdfg(
+        ir=ir,
+        offset_provider={},
+        device_type=core_defs.DeviceType.CPU,
+        auto_optimize=False,
+        async_sdfg_call=False,
+    )
+
+    constant_symbols = dace_wf_translation.find_constant_symbols(
+        ir=ir,
+        sdfg=sdfg,
+        offset_provider_type={},
+        disable_field_origin_on_program_arguments=False,
+        unstructured_horizontal_has_unit_stride=True,
+    )
+
+    assert constant_symbols == {}
 
 
 def _are_streams_set_to_default_stream(sdfg: dace.SDFG) -> bool:
