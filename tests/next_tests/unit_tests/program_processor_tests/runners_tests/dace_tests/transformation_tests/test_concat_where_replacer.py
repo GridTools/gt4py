@@ -1944,3 +1944,172 @@ def test_concat_where_multiple_producers(nb_producers: int):
 
     csdfg = util.compile_and_run_sdfg(sdfg, **res)
     assert util.compare_sdfg_res(ref=ref, res=res)
+
+
+def _make_concat_where_lower_rank_producer(
+    boundary_level: int,
+    nb_cells: int,
+    nb_levels: int,
+) -> tuple[dace.SDFG, dace.SDFGState, dace_nodes.AccessNode]:
+    """Generates a `concat_where` in which one producer has a lower rank than the node.
+
+    The `concat_where` node `c` has the dimensions "cell" and "level". The level
+    `boundary_level` is supplied by the one dimensional `boundary`, which has no level
+    dimension, while all other levels are supplied by the two dimensional `interior`.
+    Both producers are read with an offset.
+    """
+    sdfg = dace.SDFG(util.unique_name("concat_where_replacer_lower_rank_producer"))
+    state = sdfg.add_state()
+
+    shapes = {
+        "interior": (nb_cells + 1, nb_levels + 2),
+        "boundary": (nb_cells + 2,),
+        "c": (nb_cells, nb_levels),
+        "d": (nb_cells, nb_levels),
+    }
+    for name, shape in shapes.items():
+        sdfg.add_array(
+            name=name,
+            shape=shape,
+            dtype=dace.float64,
+            transient=(name == "c"),
+        )
+    interior, boundary, c, d = (state.add_access(name) for name in shapes)
+
+    # The lower rank producer is written into a subset of `c` that is degenerate along
+    #  the dimension the producer does not have.
+    state.add_nedge(
+        boundary,
+        c,
+        dace.Memlet(f"boundary[2:{nb_cells + 2}] -> [0:{nb_cells}, {boundary_level}]"),
+    )
+    for interior_levels in [(0, boundary_level), (boundary_level + 1, nb_levels)]:
+        if interior_levels[0] == interior_levels[1]:
+            continue
+        state.add_nedge(
+            interior,
+            c,
+            dace.Memlet(
+                f"interior[1:{nb_cells + 1}, {interior_levels[0] + 2}:{interior_levels[1] + 2}]"
+                f" -> [0:{nb_cells}, {interior_levels[0]}:{interior_levels[1]}]"
+            ),
+        )
+
+    state.add_mapped_tasklet(
+        "computation",
+        map_ranges={"__i": f"0:{nb_cells}", "__j": f"0:{nb_levels}"},
+        inputs={"__in": dace.Memlet("c[__i, __j]")},
+        code="__out = __in + 1.0",
+        outputs={"__out": dace.Memlet("d[__i, __j]")},
+        input_nodes={c},
+        output_nodes={d},
+        external_edges=True,
+    )
+    sdfg.validate()
+
+    return sdfg, state, c
+
+
+def _reference_concat_where_lower_rank_producer(
+    interior: np.ndarray,
+    boundary: np.ndarray,
+    boundary_level: int,
+    nb_cells: int,
+    nb_levels: int,
+) -> np.ndarray:
+    """Computes the value of `c` of the SDFG made by `_make_concat_where_lower_rank_producer()`."""
+    concat_where = np.array(interior[1 : nb_cells + 1, 2 : nb_levels + 2])
+    concat_where[:, boundary_level] = boundary[2 : nb_cells + 2]
+    return concat_where
+
+
+@pytest.mark.parametrize("nb_cells", [10, 1])
+@pytest.mark.parametrize("boundary_level", [0, 2, 4])
+def test_concat_where_lower_rank_producer(boundary_level: int, nb_cells: int):
+    """Replaces a `concat_where` node with a producer of lower rank, without compiling.
+
+    Instead of compiling the SDFG, the Tasklet that is created by the replacement is
+    evaluated in Python for every point of the Map. This is possible because its inputs
+    are connected to the full producer data.
+    """
+    nb_levels = 5
+    sdfg, state, concat_node = _make_concat_where_lower_rank_producer(
+        boundary_level=boundary_level, nb_cells=nb_cells, nb_levels=nb_levels
+    )
+    args, _ = util.make_sdfg_args(sdfg)
+    expected = _reference_concat_where_lower_rank_producer(
+        interior=args["interior"],
+        boundary=args["boundary"],
+        boundary_level=boundary_level,
+        nb_cells=nb_cells,
+        nb_levels=nb_levels,
+    )
+    tasklets_before = util.count_nodes(state, dace_nodes.Tasklet, True)
+    assert len(tasklets_before) == 1
+
+    nb_repl = gtx_transformations.gt_replace_concat_where_node(
+        state=state,
+        sdfg=sdfg,
+        concat_node=concat_node,
+    )
+    assert nb_repl == 1
+    sdfg.validate()
+    assert concat_node.data not in sdfg.arrays
+
+    concat_where_tlets = [
+        tlet
+        for tlet in util.count_nodes(state, dace_nodes.Tasklet, True)
+        if tlet not in tasklets_before
+    ]
+    assert len(concat_where_tlets) == 1
+    concat_where_tlet = concat_where_tlets[0]
+    assert concat_where_tlet.code.language is dace.dtypes.Language.Python
+
+    tlet_inputs: dict[str, np.ndarray] = {}
+    for iedge in state.in_edges(concat_where_tlet):
+        assert iedge.data.subset == dace_sbs.Range.from_array(sdfg.arrays[iedge.data.data])
+        tlet_inputs[iedge.dst_conn] = args[iedge.data.data]
+    assert {iedge.data.data for iedge in state.in_edges(concat_where_tlet)} == {
+        "interior",
+        "boundary",
+    }
+
+    for i, j in np.ndindex(nb_cells, nb_levels):
+        tlet_env = {**tlet_inputs, "__i": i, "__j": j}
+        exec(concat_where_tlet.code.as_string, {}, tlet_env)
+        assert tlet_env["__out"] == expected[i, j]
+
+
+@pytest.mark.parametrize("nb_cells", [10, 1])
+@pytest.mark.parametrize("boundary_level", [0, 2, 4])
+def test_concat_where_lower_rank_producer_compiled(boundary_level: int, nb_cells: int):
+    nb_levels = 5
+    sdfg, state, concat_node = _make_concat_where_lower_rank_producer(
+        boundary_level=boundary_level, nb_cells=nb_cells, nb_levels=nb_levels
+    )
+
+    ref, res = util.make_sdfg_args(sdfg)
+    util.compile_and_run_sdfg(sdfg, **ref)
+    assert np.allclose(
+        ref["d"],
+        _reference_concat_where_lower_rank_producer(
+            interior=ref["interior"],
+            boundary=ref["boundary"],
+            boundary_level=boundary_level,
+            nb_cells=nb_cells,
+            nb_levels=nb_levels,
+        )
+        + 1.0,
+    )
+
+    nb_repl = gtx_transformations.gt_replace_concat_where_node(
+        state=state,
+        sdfg=sdfg,
+        concat_node=concat_node,
+    )
+    assert nb_repl == 1
+    sdfg.validate()
+    assert concat_node.data not in sdfg.arrays
+
+    util.compile_and_run_sdfg(sdfg, **res)
+    assert util.compare_sdfg_res(ref=ref, res=res)
