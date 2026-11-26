@@ -77,16 +77,13 @@ def _translate_gtir_to_sdfg(
         ).generate_sdfg(ir, offset_provider=offset_provider, column_axis=None)
 
 
-@pytest.mark.parametrize("has_unit_stride", [False, True])
-@pytest.mark.parametrize("disable_field_origin", [False, True])
-def test_find_constant_symbols_unstructured(has_unit_stride, disable_field_origin):
-    """Unit stride must only be set on the horizontal dimension, not on the vertical one."""
-    SKIP_VALUE_MESH = skip_value_mesh(None)
+def _make_unstructured_program(program_id: str) -> itir.Program:
+    """Neighbor reduction over 'V2E' on fields with a vertical dimension."""
     ekftype = ts.FieldType(dims=[Edge, KDim], dtype=FLOAT_TYPE)
     vkftype = ts.FieldType(dims=[Vertex, KDim], dtype=FLOAT_TYPE)
 
-    ir = itir.Program(
-        id="find_constant_symbols_unstructured_sdfg",
+    return itir.Program(
+        id=program_id,
         function_definitions=[],
         params=[
             itir.Sym(id="x", type=ekftype),
@@ -103,6 +100,14 @@ def test_find_constant_symbols_unstructured(has_unit_stride, disable_field_origi
             )
         ],
     )
+
+
+@pytest.mark.parametrize("has_unit_stride", [False, True])
+@pytest.mark.parametrize("disable_field_origin", [False, True])
+def test_find_constant_symbols(has_unit_stride, disable_field_origin):
+    """Unit stride must only be set on the horizontal dimension, not on the vertical one."""
+    SKIP_VALUE_MESH = skip_value_mesh(None)
+    ir = _make_unstructured_program("find_constant_symbols_sdfg")
 
     sdfg = _translate_gtir_to_sdfg(
         ir=ir,
@@ -138,10 +143,10 @@ def test_find_constant_symbols_unstructured(has_unit_stride, disable_field_origi
     assert constant_symbols == expected
 
 
-def test_find_constant_symbols_cartesian():
-    """Unit stride must not be set on fields of a cartesian program."""
-    ir = itir.Program(
-        id="find_constant_symbols_cartesian_sdfg",
+def _make_cartesian_program(program_id: str) -> itir.Program:
+    """Point-wise operation on fields with two horizontal dimensions."""
+    return itir.Program(
+        id=program_id,
         declarations=[],
         function_definitions=[],
         params=[
@@ -157,23 +162,61 @@ def test_find_constant_symbols_cartesian():
         ],
     )
 
-    sdfg = _translate_gtir_to_sdfg(
-        ir=ir,
-        offset_provider={},
+
+@pytest.mark.parametrize(
+    "grid_type", [gtx_common.GridType.CARTESIAN, gtx_common.GridType.UNSTRUCTURED]
+)
+def test_translation_grid_type(grid_type):
+    """
+    The translator records the grid type of the program on its output, and the
+    emitted SDFG has unit stride on the horizontal dimension only for unstructured
+    programs.
+    """
+    if grid_type == gtx_common.GridType.UNSTRUCTURED:
+        ir = _make_unstructured_program("translation_grid_type_unstructured")
+        offset_provider = skip_value_mesh(None).offset_provider
+        expected_strides = {
+            "x": ("1", "__x_KDim_stride"),
+            "y": ("1", "__y_KDim_stride"),
+            "gt_conn_V2E": ("1", "__gt_conn_V2E_neighbor_stride"),
+        }
+    else:
+        ir = _make_cartesian_program("translation_grid_type_cartesian")
+        offset_provider = {}
+        expected_strides = {
+            "x": ("__x_IDim_stride", "__x_JDim_stride"),
+            "y": ("__y_IDim_stride", "__y_JDim_stride"),
+        }
+
+    compilable_program = otf_workflow.ConcreteArtifact(
+        data=ir,
+        args=otf_arguments.CompileTimeArgs(
+            args=tuple(param.type for param in ir.params),
+            kwargs={},
+            offset_provider=offset_provider,
+            column_axis=None,
+            argument_descriptor_contexts={},
+        ),
+    )
+    translator = dace_wf_translation.DaCeTranslator(
         device_type=core_defs.DeviceType.CPU,
         auto_optimize=False,
+        auto_optimize_args=None,
         async_sdfg_call=False,
-    )
-
-    constant_symbols = dace_wf_translation.find_constant_symbols(
-        ir=ir,
-        sdfg=sdfg,
-        offset_provider_type={},
-        disable_field_origin_on_program_arguments=False,
         unstructured_horizontal_has_unit_stride=True,
+        use_metrics=False,
     )
 
-    assert constant_symbols == {}
+    program_source = translator(compilable_program)
+
+    assert program_source.grid_type == grid_type
+    sdfg = dace.SDFG.from_json(program_source.source_code)
+    strides = {
+        name: tuple(str(stride) for stride in desc.strides)
+        for name, desc in sdfg.arrays.items()
+        if not desc.transient
+    }
+    assert strides == expected_strides
 
 
 def _are_streams_set_to_default_stream(sdfg: dace.SDFG) -> bool:

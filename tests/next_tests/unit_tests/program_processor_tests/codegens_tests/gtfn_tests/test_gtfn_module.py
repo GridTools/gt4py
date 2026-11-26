@@ -9,32 +9,34 @@
 import copy
 
 from gt4py._core import filecache
-import numpy as np
 import pytest
 
 import gt4py.next as gtx
 from gt4py.next.iterator import builtins, ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
-from gt4py.next import fingerprinting
+from gt4py.next import common, fingerprinting
 from gt4py.next.otf import arguments, artifacts, stages
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
-from gt4py.next.type_system import type_translation
+from gt4py.next.type_system import type_specifications as ts
 from gt4py.next import custom_layout_allocators as next_allocators
 
 from next_tests.integration_tests import cases
 from next_tests.integration_tests.cases import cartesian_case, cartesian_case_no_backend
 from next_tests.integration_tests.cases_utils import (
+    V2E,
+    Edge,
     KDim,
+    Vertex,
     exec_alloc_descriptor,
+    skip_value_mesh,
 )
 
 
-@pytest.fixture
-def program_example():
-    IDim = gtx.Dimension("I")
-    params = [gtx.as_field([IDim], np.empty((1,), dtype=np.float32)), np.float32(3.14)]
-    param_types = [type_translation.from_value(param) for param in params]
+def _make_cartesian_program() -> itir.Program:
+    """Point-wise operation on a 1D cartesian field."""
+    float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT32)
+    param_types = [ts.FieldType(dims=[gtx.Dimension("I")], dtype=float_type), float_type]
 
     domain = itir.FunCall(
         fun=itir.SymRef(id="cartesian_domain"),
@@ -49,7 +51,7 @@ def program_example():
             )
         ],
     )
-    program = itir.Program(
+    return itir.Program(
         id="example",
         params=[im.sym(name, type_) for name, type_ in zip(("buf", "sc"), param_types)],
         function_definitions=[
@@ -70,28 +72,66 @@ def program_example():
             )
         ],
     )
-    return program, params
 
 
-def test_codegen(program_example):
-    fencil, parameters = program_example
-    module = gtfn_module.translate_program_cpu(
-        stages.CompilableProgramDef(
-            data=fencil,
-            args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
-        )
+def _make_unstructured_program() -> itir.Program:
+    """Neighbor reduction over 'V2E'."""
+    float_type = ts.ScalarType(kind=ts.ScalarKind.FLOAT64)
+    vftype = ts.FieldType(dims=[Vertex], dtype=float_type)
+    return itir.Program(
+        id="example_unstructured",
+        function_definitions=[],
+        params=[
+            im.sym("x", ts.FieldType(dims=[Edge], dtype=float_type)),
+            im.sym("y", vftype),
+        ],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.as_fieldop(
+                    im.lambda_("it")(im.reduce("plus", im.literal_from_value(1.0))(im.deref("it")))
+                )(im.as_fieldop_neighbors(V2E.value, "x")),
+                domain=im.get_field_domain(common.GridType.UNSTRUCTURED, "y", vftype.dims),
+                target=itir.SymRef(id="y"),
+            )
+        ],
     )
-    assert module.entry_point.name == fencil.id
+
+
+def _make_compilable_program(
+    program: itir.Program, offset_provider: common.OffsetProvider
+) -> stages.CompilableProgramDef:
+    return stages.CompilableProgramDef(
+        data=program,
+        args=arguments.CompileTimeArgs(
+            args=tuple(param.type for param in program.params),
+            kwargs={},
+            offset_provider=offset_provider,
+            column_axis=None,
+            argument_descriptor_contexts={},
+        ),
+    )
+
+
+@pytest.mark.parametrize("grid_type", [common.GridType.CARTESIAN, common.GridType.UNSTRUCTURED])
+def test_codegen(grid_type):
+    if grid_type == common.GridType.CARTESIAN:
+        program = _make_cartesian_program()
+        offset_provider = {}
+    else:
+        program = _make_unstructured_program()
+        offset_provider = skip_value_mesh(None).offset_provider
+
+    module = gtfn_module.translate_program_cpu(_make_compilable_program(program, offset_provider))
+
+    assert module.entry_point.name == program.id
     assert any(d.name == "gridtools_cpu" for d in module.library_deps)
     assert isinstance(module.code_spec, artifacts.CPPCodeSpec)
+    assert module.grid_type == grid_type
 
 
-def test_hash_and_diskcache(program_example, tmp_path):
-    fencil, parameters = program_example
-    compilable_program = stages.CompilableProgramDef(
-        data=fencil,
-        args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
-    )
+def test_hash_and_diskcache(tmp_path):
+    compilable_program = _make_compilable_program(_make_cartesian_program(), offset_provider={})
     hash = fingerprinting.strict_fingerprinter(compilable_program)
 
     cache = filecache.FileCache(tmp_path)
@@ -128,12 +168,8 @@ def test_hash_and_diskcache(program_example, tmp_path):
     ) != fingerprinting.strict_fingerprinter(altered_program_column_axis)
 
 
-def test_gtfn_file_cache(program_example):
-    fencil, parameters = program_example
-    compilable_program = stages.CompilableProgramDef(
-        data=fencil,
-        args=arguments.CompileTimeArgs.from_concrete(*parameters, **{"offset_provider": {}}),
-    )
+def test_gtfn_file_cache():
+    compilable_program = _make_compilable_program(_make_cartesian_program(), offset_provider={})
     cached_gtfn_translation_step = gtfn.make_gtfn_compile_workflow(
         gtfn.GTFNConfig(cached_translation=True)
     ).translation
