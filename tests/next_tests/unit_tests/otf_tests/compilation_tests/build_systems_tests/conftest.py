@@ -13,7 +13,7 @@ import pytest
 
 import gt4py.next as gtx
 import gt4py.next.type_system.type_specifications as ts
-from gt4py.next import common, config
+from gt4py.next import config
 from gt4py.next.otf import artifacts
 from gt4py.next.otf.binding import cpp_interface, interface, nanobind
 from gt4py.next.otf.compilation import cache
@@ -74,7 +74,6 @@ def make_program_source(name: str) -> artifacts.ProgramSource:
         source_code=src,
         library_deps=(interface.LibraryDependency("gridtools_cpu", "master"),),
         code_spec=artifacts.CPPCodeSpec(),
-        grid_type=common.GridType.CARTESIAN,
     )
 
 

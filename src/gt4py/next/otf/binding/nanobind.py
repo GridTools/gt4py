@@ -253,13 +253,6 @@ def create_bindings(
         )
     wrapper_name = program_source.entry_point.name + "_wrapper"
 
-    # Unit stride on horizontal dimensions is only assumed for unstructured programs:
-    #  on a cartesian grid, a field can have more than one horizontal dimension.
-    has_unit_stride = (
-        unstructured_horizontal_has_unit_stride
-        and program_source.grid_type == common.GridType.UNSTRUCTURED
-    )
-
     Stmt = ReturnStmt if program_source.entry_point.returns else ExprStmt
     file_binding = BindingFile(
         callee_header_file=f"{program_source.entry_point.name}.{program_source.code_spec.header_extension}",
@@ -290,7 +283,9 @@ def create_bindings(
                 expr=FunctionCall(
                     target=program_source.entry_point,
                     args=[
-                        make_argument(param.name, param.type_, has_unit_stride)
+                        make_argument(
+                            param.name, param.type_, unstructured_horizontal_has_unit_stride
+                        )
                         for param in program_source.entry_point.parameters
                     ],
                 )

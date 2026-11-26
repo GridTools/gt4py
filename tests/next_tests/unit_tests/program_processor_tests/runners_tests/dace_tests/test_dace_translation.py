@@ -167,11 +167,7 @@ def _make_cartesian_program(program_id: str) -> itir.Program:
     "grid_type", [gtx_common.GridType.CARTESIAN, gtx_common.GridType.UNSTRUCTURED]
 )
 def test_translation_grid_type(grid_type):
-    """
-    The translator records the grid type of the program on its output, and the
-    emitted SDFG has unit stride on the horizontal dimension only for unstructured
-    programs.
-    """
+    """The emitted SDFG has unit stride on the horizontal dimension only for unstructured programs."""
     if grid_type == gtx_common.GridType.UNSTRUCTURED:
         ir = _make_unstructured_program("translation_grid_type_unstructured")
         offset_provider = skip_value_mesh(None).offset_provider
@@ -209,7 +205,6 @@ def test_translation_grid_type(grid_type):
 
     program_source = translator(compilable_program)
 
-    assert program_source.grid_type == grid_type
     sdfg = dace.SDFG.from_json(program_source.source_code)
     strides = {
         name: tuple(str(stride) for stride in desc.strides)

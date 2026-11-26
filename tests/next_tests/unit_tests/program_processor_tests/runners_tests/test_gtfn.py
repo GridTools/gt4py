@@ -26,11 +26,14 @@ import unittest.mock
 import pytest
 
 import gt4py._core.definitions as core_defs
-from gt4py.next import config, custom_layout_allocators
-from gt4py.next.otf import workflow
+import gt4py.next as gtx
+from gt4py.next import common, config, custom_layout_allocators
+from gt4py.next.otf import artifacts, workflow
+from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import build_data, cache, compiler, importer
 from gt4py.next.program_processors.codegens.gtfn import gtfn_module
 from gt4py.next.program_processors.runners import gtfn
+from gt4py.next.type_system import type_specifications as ts
 
 
 def test_make_gtfn_toolchain_device():
@@ -204,3 +207,60 @@ def test_compile_workflow_without_config_caches_translation():
 
     assert isinstance(workflow_.translation, workflow.CachedStep)
     assert isinstance(workflow_.translation.step, gtfn_module.GTFNTranslationStep)
+
+
+_DYN = "gridtools::nanobind::dynamic_size"
+
+
+@pytest.mark.parametrize(
+    "grid_type, dims, has_unit_stride, expected_stride_spec",
+    [
+        # unstructured: unit stride on the horizontal dimension only, not on the vertical one
+        (
+            common.GridType.UNSTRUCTURED,
+            [gtx.Dimension("Vertex"), gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)],
+            True,
+            f"1, {_DYN}",
+        ),
+        (
+            common.GridType.UNSTRUCTURED,
+            [gtx.Dimension("Vertex"), gtx.Dimension("K", kind=gtx.DimensionKind.VERTICAL)],
+            False,
+            f"{_DYN}, {_DYN}",
+        ),
+        # cartesian: never unit stride, although both dimensions are horizontal
+        (
+            common.GridType.CARTESIAN,
+            [gtx.Dimension("I"), gtx.Dimension("J")],
+            True,
+            f"{_DYN}, {_DYN}",
+        ),
+    ],
+)
+def test_bindings_static_strides(grid_type, dims, has_unit_stride, expected_stride_spec):
+    program_source = gtfn_module.GTFNProgramSource(
+        entry_point=interface.Function(
+            "stencil",
+            parameters=(
+                interface.Parameter(
+                    name="buf",
+                    type_=ts.FieldType(dims=dims, dtype=ts.ScalarType(ts.ScalarKind.FLOAT64)),
+                ),
+            ),
+        ),
+        source_code="",
+        library_deps=(),
+        code_spec=artifacts.CPPCodeSpec(),
+        grid_type=grid_type,
+    )
+    bindings = gtfn.make_gtfn_bindings(
+        gtfn.GTFNConfig(unstructured_horizontal_has_unit_stride=has_unit_stride)
+    )
+
+    extension = bindings(program_source)
+
+    assert extension.binding_source is not None
+    assert (
+        f"gridtools::nanobind::stride_spec<{expected_stride_spec}>{{}}"
+        in extension.binding_source.source_code
+    )

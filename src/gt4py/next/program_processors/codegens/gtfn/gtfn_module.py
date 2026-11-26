@@ -34,6 +34,19 @@ def get_param_description(name: str, type_: Any) -> interface.Parameter:
 
 
 @dataclasses.dataclass(frozen=True)
+class GTFNProgramSource(artifacts.ProgramSource[artifacts.HeaderAndSourceCodeSpec]):
+    """
+    Program source emitted by the GTFN translation step.
+
+    It extends the generic `ProgramSource` with properties of the translated program
+    that only the GTFN toolchain needs, e.g. the grid type, which the GTFN bindings
+    step uses to decide whether the horizontal dimensions have unit stride.
+    """
+
+    grid_type: common.GridType
+
+
+@dataclasses.dataclass(frozen=True)
 class GTFNTranslationStep(
     workflow.ReplaceEnabledWorkflowMixin[
         stages.CompilableProgramDef,
@@ -174,9 +187,7 @@ class GTFNTranslationStep(
 
         return GTFNCodegen.apply(gtfn_ir)
 
-    def __call__(
-        self, inp: stages.CompilableProgramDef
-    ) -> artifacts.ProgramSource[artifacts.HeaderAndSourceCodeSpec]:
+    def __call__(self, inp: stages.CompilableProgramDef) -> GTFNProgramSource:
         """Generate GTFN C++ code from the ITIR definition."""
         program: itir.Program = inp.data
 
@@ -218,16 +229,13 @@ class GTFNTranslationStep(
             ]
         )
 
-        module: artifacts.ProgramSource[artifacts.HeaderAndSourceCodeSpec] = (
-            artifacts.ProgramSource(
-                entry_point=function,
-                library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
-                source_code=source_code,
-                code_spec=self._code_spec(),
-                grid_type=ir_misc.grid_type_from_program(program),
-            )
+        return GTFNProgramSource(
+            entry_point=function,
+            library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
+            source_code=source_code,
+            code_spec=self._code_spec(),
+            grid_type=ir_misc.grid_type_from_program(program),
         )
-        return module
 
     def _backend_header(self) -> str:
         match self.device_type:

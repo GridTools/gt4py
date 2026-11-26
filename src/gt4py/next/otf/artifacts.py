@@ -28,7 +28,6 @@ import dataclasses
 from collections.abc import Callable
 from typing import Generic, Optional, Protocol, TypeAlias, TypeVar, runtime_checkable
 
-from gt4py.next import common
 from gt4py.next.otf.binding import interface
 
 
@@ -108,15 +107,12 @@ class ProgramSource(Generic[CodeSpecT]):
     - implementation language and language conventions
     - dependencies on implementation language libraries
     - how to call the program
-    - the grid type of the program (e.g. bindings use it to decide whether the
-      horizontal dimensions can be assumed to have unit stride)
     """
 
     entry_point: interface.Function
     source_code: str
     library_deps: tuple[interface.LibraryDependency, ...]
     code_spec: CodeSpecT
-    grid_type: common.GridType
 
 
 @dataclasses.dataclass(frozen=True)

@@ -124,10 +124,11 @@ def test_codegen(grid_type):
 
     module = gtfn_module.translate_program_cpu(_make_compilable_program(program, offset_provider))
 
+    assert isinstance(module, gtfn_module.GTFNProgramSource)
+    assert module.grid_type == grid_type
     assert module.entry_point.name == program.id
     assert any(d.name == "gridtools_cpu" for d in module.library_deps)
     assert isinstance(module.code_spec, artifacts.CPPCodeSpec)
-    assert module.grid_type == grid_type
 
 
 def test_hash_and_diskcache(tmp_path):

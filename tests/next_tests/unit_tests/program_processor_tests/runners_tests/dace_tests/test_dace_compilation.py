@@ -24,7 +24,7 @@ import pytest
 from dace.sdfg import nodes as dace_nodes
 
 from gt4py._core import definitions as core_defs
-from gt4py.next import common, config
+from gt4py.next import config
 from gt4py.next.otf import artifacts
 from gt4py.next.otf.binding import interface
 from gt4py.next.program_processors.runners.dace.workflow import (
@@ -93,7 +93,6 @@ def program_source() -> dace_wf_compilation.SDFGExtensionSource:
         source_code=_make_sdfg_with_gpu_map().to_json(),
         library_deps=(),
         code_spec=artifacts.SDFGCodeSpec(),
-        grid_type=common.GridType.CARTESIAN,
     )
     binding_source = artifacts.BindingSource(source_code="", library_deps=())
     return artifacts.ExtensionSource(program_source=program_source, binding_source=binding_source)
