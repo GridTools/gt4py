@@ -17,7 +17,7 @@ import subprocess
 from typing import Final, Optional, TypeVar
 
 from gt4py._core import file_utils, locking
-from gt4py.next import config, errors, fingerprinting
+from gt4py.next import common, config, errors, fingerprinting
 from gt4py.next.otf import artifacts
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import build_data, cache, compiler
@@ -263,6 +263,8 @@ def _cc_prototype_program_source(
         source_code="",
         library_deps=deps,
         code_spec=code_spec,
+        # The prototype program is empty, it has no grid: any grid type will do.
+        grid_type=common.GridType.CARTESIAN,
     )
 
 

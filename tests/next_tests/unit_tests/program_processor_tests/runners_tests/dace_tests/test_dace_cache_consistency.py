@@ -31,7 +31,7 @@ import dace
 import pytest
 
 from gt4py._core import definitions as core_defs, locking
-from gt4py.next import config, fingerprinting
+from gt4py.next import common, config, fingerprinting
 from gt4py.next.otf import artifacts
 from gt4py.next.otf.binding import interface
 from gt4py.next.otf.compilation import cache as gtx_cache
@@ -64,6 +64,7 @@ def _make_input(name: str) -> artifacts.ExtensionSource:
         source_code=sdfg.to_json(),
         library_deps=(),
         code_spec=artifacts.SDFGCodeSpec(),
+        grid_type=common.GridType.CARTESIAN,
     )
     return artifacts.ExtensionSource(
         program_source=program_source,

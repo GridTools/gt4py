@@ -541,5 +541,6 @@ class DaCeTranslator(
             source_code=gtx_wfdcommon.serialize_sdfg_as_json(sdfg),  # type: ignore[arg-type] # The source code is typed as a `str`, but we assign a JSON dictionary.
             library_deps=tuple(),
             code_spec=artifacts.SDFGCodeSpec(),
+            grid_type=ir_misc.grid_type_from_program(program),
         )
         return module

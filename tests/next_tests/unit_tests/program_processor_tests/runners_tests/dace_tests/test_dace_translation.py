@@ -145,7 +145,7 @@ def test_find_constant_symbols_cartesian():
         declarations=[],
         function_definitions=[],
         params=[
-            itir.Sym(id="x", type=ts.FieldType(dims=[IDim], dtype=FLOAT_TYPE)),
+            itir.Sym(id="x", type=ts.FieldType(dims=[IDim, JDim], dtype=FLOAT_TYPE)),
             itir.Sym(id="y", type=ts.FieldType(dims=[IDim, JDim], dtype=FLOAT_TYPE)),
         ],
         body=[

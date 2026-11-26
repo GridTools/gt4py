@@ -8,6 +8,7 @@
 
 import pytest
 
+from gt4py.next import common
 from gt4py.next.otf import artifacts
 from gt4py.next.otf.binding import interface
 
@@ -18,4 +19,5 @@ def test_header_files_settings_with_cpp_accepted():
         source_code="",
         library_deps=(),
         code_spec=artifacts.CPPCodeSpec(),
+        grid_type=common.GridType.CARTESIAN,
     )

@@ -17,6 +17,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.ffront import fbuiltins
 from gt4py.next.iterator import ir as itir
+from gt4py.next.iterator.ir_utils import misc as ir_misc
 from gt4py.next.iterator.transforms import pass_manager
 from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.binding import cpp_interface, interface
@@ -223,6 +224,7 @@ class GTFNTranslationStep(
                 library_deps=(interface.LibraryDependency(self._library_name(), "master"),),
                 source_code=source_code,
                 code_spec=self._code_spec(),
+                grid_type=ir_misc.grid_type_from_program(program),
             )
         )
         return module
