@@ -17,6 +17,7 @@ from gt4py._core import definitions as core_defs
 from gt4py.next import common
 from gt4py.next.instrumentation import metrics
 from gt4py.next.iterator import ir as itir, transforms as itir_transforms
+from gt4py.next.iterator.ir_utils import misc as ir_misc
 from gt4py.next.iterator.transforms import scan_fusion as gtx_scan_fusion
 from gt4py.next.otf import artifacts, stages, workflow
 from gt4py.next.otf.binding import interface
@@ -39,7 +40,8 @@ def find_constant_symbols(
     """Helper function to find symbols to replace with constant values."""
     constant_symbols: dict[str, int] = {}
 
-    if unstructured_horizontal_has_unit_stride:
+    grid_type = ir_misc.grid_type_from_program(ir)
+    if (grid_type == common.GridType.UNSTRUCTURED) and unstructured_horizontal_has_unit_stride:
         # Search the stride symbols corresponding to the horizontal dimension
         for p in ir.params:
             if isinstance(p.type, ts.FieldType):

@@ -167,15 +167,41 @@ def make_gtfn_translation(
     )
 
 
+@dataclasses.dataclass(frozen=True)
+class GTFNBindings:
+    """
+    Generate the nanobind bindings of a program translated by `GTFNTranslationStep`.
+
+    Unit stride on the horizontal dimensions is assumed only for unstructured
+    programs: on a cartesian grid, a field can have more than one horizontal
+    dimension.
+    """
+
+    unstructured_horizontal_has_unit_stride: bool
+
+    def __call__(
+        self, program_source: gtfn_module.GTFNProgramSource
+    ) -> artifacts.ExtensionSource[artifacts.HeaderAndSourceCodeSpec, artifacts.PythonCodeSpec]:
+        has_unit_stride = (
+            self.unstructured_horizontal_has_unit_stride
+            and program_source.grid_type == common.GridType.UNSTRUCTURED
+        )
+        # `GTFNTranslationStep` types its code spec as `HeaderAndSourceCodeSpec`, while
+        # `ExtensionGenerator` accepts only C++-like specs, the only ones the step emits.
+        return nanobind.ExtensionGenerator(  # type: ignore[type-var] # see comment above
+            unstructured_horizontal_has_unit_stride=has_unit_stride
+        )(program_source)
+
+
 def make_gtfn_bindings(
     cfg: GTFNConfig, /
 ) -> workflow.Workflow[artifacts.ProgramSource, artifacts.ExtensionSource]:
     """Build the step generating the nanobind bindings of the translated program."""
-    # `OTFCompileWorkflow` is not parameterized over the code spec, so its
-    # `bindings` field is typed for `ProgramSource[Any]` while
-    # `ExtensionGenerator` accepts only C++-like specs. Parameterizing the
-    # pipeline is the real fix and belongs with the pipeline rework.
-    return nanobind.ExtensionGenerator(  # type: ignore[return-value] # see comment above
+    # `OTFCompileWorkflow` is not parameterized over the program source, so its
+    # `bindings` field is typed for `ProgramSource[Any]` while `GTFNBindings`
+    # accepts only the `GTFNProgramSource` emitted by `GTFNTranslationStep`.
+    # Parameterizing the pipeline is the real fix and belongs with the pipeline rework.
+    return GTFNBindings(  # type: ignore[return-value] # see comment above
         unstructured_horizontal_has_unit_stride=cfg.unstructured_horizontal_has_unit_stride
     )
 
