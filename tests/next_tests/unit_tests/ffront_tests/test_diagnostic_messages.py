@@ -224,7 +224,33 @@ def test_toolchain_step_attaches_definition_context():
 def test_diagnostic_codes_are_stable():
     assert errors.UndefinedSymbolError.code == "undefined-symbol"
     assert errors.UnsupportedPythonFeatureError.code == "unsupported-syntax"
+    assert errors.InOutFieldReadWithOffsetError.code == "inout-field-read-with-offset"
     assert errors.DSLError.code is None
+
+
+def test_inout_field_read_with_offset_points_at_the_output():
+    @gtx.field_operator
+    def copy_from_right(a: gtx.Field[[IDim], float64]) -> gtx.Field[[IDim], float64]:
+        return a(IOff[1])
+
+    def in_place_shift(field: gtx.Field[[IDim], float64]):
+        copy_from_right(field, out=field)
+
+    with pytest.raises(errors.InOutFieldReadWithOffsetError) as exc_info:
+        gtx.program(in_place_shift)
+    err = exc_info.value
+
+    assert err.message == (
+        "Field 'field' is written by this call and also read by it at another point."
+    )
+    assert err.label == "written here"
+    assert err.notes[0] == "'field' is read shifted by +1 along 'IDim'."
+    assert "ADR 18, rule 3" in err.notes[1]
+    assert any("copy it back in a separate call" in hint for hint in err.hints)
+    rendered = str(err)
+    assert rendered.count("copy_from_right(field, out=field)") == 1
+    assert re.search(r"\| +\^{5} written here", rendered), rendered
+    assert re.search(r"\| +-{5} read here", rendered), rendered
 
 
 def test_unsupported_parameter_annotation_is_located():

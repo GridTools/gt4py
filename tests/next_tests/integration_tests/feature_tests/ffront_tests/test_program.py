@@ -250,6 +250,50 @@ def test_tuple_program_return_constructed_inside_nested(cartesian_case):
     )
 
 
+def test_inout_pointwise(cartesian_case):
+    @gtx.field_operator
+    def increment(a: cases.IFloatField) -> cases.IFloatField:
+        return a + 1.0
+
+    @gtx.program
+    def prog(a: cases.IFloatField):
+        increment(a, out=a)
+
+    a = cases.allocate(cartesian_case, prog, "a")()
+    ref = a.asnumpy() + 1.0
+
+    cases.verify(cartesian_case, prog, a, inout=a, ref=ref)
+
+
+@pytest.mark.uses_program_with_sliced_out_arguments
+@pytest.mark.uses_cartesian_shift
+@pytest.mark.uses_tuple_returns
+def test_inout_passthrough_read_with_offset(cartesian_case):
+    # `a` is read at an offset by the call writing it, which is fine as it is written unchanged
+    @gtx.field_operator
+    def difference_and_passthrough(
+        a: cases.IFloatField,
+    ) -> tuple[cases.IFloatField, cases.IFloatField]:
+        return a(IDim + 1) - a, a
+
+    @gtx.program
+    def prog(a: cases.IFloatField, diff: cases.IFloatField):
+        difference_and_passthrough(a, out=(diff[:-1], a[:-1]))
+
+    a = cases.allocate(cartesian_case, prog, "a")()
+    diff = cases.allocate(cartesian_case, prog, "diff").strategy(cases.ConstInitializer(0))()
+    a_ref = a.asnumpy().copy()
+
+    cases.verify(
+        cartesian_case,
+        prog,
+        a,
+        diff,
+        inout=(diff[:-1], a),
+        ref=(a_ref[1:] - a_ref[:-1], a_ref),
+    )
+
+
 def test_wrong_argument_type(cartesian_case, copy_program_def):
     copy_program = gtx.program(copy_program_def, backend=cartesian_case.backend)
 
