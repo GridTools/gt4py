@@ -8,7 +8,9 @@
 
 from __future__ import annotations
 
+import ast
 import warnings
+from dataclasses import dataclass
 from typing import Any, Callable, Dict, Optional, Sequence, TypeAlias, Union
 
 import dace
@@ -24,7 +26,7 @@ from dace.sdfg import (
     utils as dace_sdutils,
 )
 from dace.transformation.dataflow import map_fusion_helper as dace_mfhelper
-from dace.transformation.passes import analysis as dace_analysis
+from dace.transformation.passes import analysis as dace_analysis, pattern_matching as dace_matching
 
 from gt4py.next import common as gtx_common
 from gt4py.next.program_processors.runners.dace import (
@@ -212,7 +214,8 @@ def gt_vertical_map_split_fusion(
             `check_fusion_callback` is not used.
         single_use_data: Precomputed single use data.
         allow_shared_output: Allow splitting pointwise external outputs while
-            preserving their stores. Disabled until explicitly selected.
+            preserving their stores. Without a split callback, competing readers
+            are considered in the producer's output edge order.
         shared_output_data: If given, restrict shared-output splitting to candidates
             connected through these arrays. `None` allows any eligible array; an empty
             sequence disables shared-output splitting. Requires `allow_shared_output=True`.
@@ -240,8 +243,14 @@ def gt_vertical_map_split_fusion(
         find_single_use_data = dace_analysis.FindSingleUseData()
         single_use_data = find_single_use_data.apply_pass(sdfg, None)
 
+    # An explicit split hook can change the options for each match.
+    split_type = (
+        _OrderedSharedOutputSplit
+        if allow_shared_output and check_split_callback is None
+        else VerticalSplitMapRange
+    )
     transformations = [
-        VerticalSplitMapRange(
+        split_type(
             only_toplevel_maps=True,
             check_split_callback=check_split_callback,
             consolidate_edges_only_if_not_extending=consolidate_edges_only_if_not_extending,
@@ -1082,6 +1091,125 @@ class VerticalSplitMapRange(SplitMapRange):
 
             # This is not efficient, but it is currently the only way to run it
             sdfg.apply_transformations_repeated(trafo, validate=False, validate_all=False)
+
+
+@dataclass(frozen=True)
+class _ReadCost:
+    worst: int
+    total: int
+    complete: bool
+
+    @property
+    def key(self) -> tuple[int, int]:
+        return self.worst, self.total
+
+
+def _read_cost(graph: dace.SDFGState, entry: dace_nodes.MapEntry) -> _ReadCost:
+    """Score visible tasklet subscripts by worst and total input-dependent axes."""
+    worst = total = 0
+    complete = True
+    for node, _ in graph.scope_subgraph(
+        entry, include_entry=False, include_exit=False
+    ).all_nodes_recursive():
+        if isinstance(node, dace_nodes.LibraryNode):
+            complete = False
+        if not isinstance(node, dace_nodes.Tasklet):
+            continue
+        if node.code.language != dace.Language.Python:
+            complete = False
+            continue
+        # Use only straight-line assignments, where the origin of an index is visible.
+        statements = node.code.code
+        if any(
+            not isinstance(s, ast.Assign)
+            or len(s.targets) != 1
+            or not isinstance(s.targets[0], ast.Name)
+            for s in statements
+        ):
+            complete = False
+            continue
+        inputs = set(node.in_connectors)
+        dependent = inputs.copy()
+
+        def uses_input(expr: ast.AST, names: set[str]) -> bool:
+            return any(isinstance(n, ast.Name) and n.id in names for n in ast.walk(expr))
+
+        for stmt in statements:
+            for read in ast.walk(stmt.value):
+                if not isinstance(read, ast.Subscript):
+                    continue
+                if not isinstance(read.value, ast.Name) or read.value.id not in inputs:
+                    complete = False
+                    continue
+                axes = read.slice.elts if isinstance(read.slice, ast.Tuple) else [read.slice]
+                count = sum(uses_input(axis, dependent) for axis in axes)
+                worst = max(worst, count)
+                total += count
+            name = stmt.targets[0].id
+            if uses_input(stmt.value, dependent):
+                dependent.add(name)
+            else:
+                dependent.discard(name)
+    return _ReadCost(worst, total, complete)
+
+
+class _OrderedSharedOutputSplit(VerticalSplitMapRange):
+    """Prefer a consumer with fewer input-dependent indices when its score is decisive."""
+
+    def __init__(self, **options: Any) -> None:
+        super().__init__(**options)
+        self._options = options
+
+    def apply(self, graph: Union[dace.SDFGState, dace.SDFG], sdfg: dace.SDFG) -> None:
+        if self.access_node.desc(sdfg).transient:
+            return super().apply(graph, sdfg)
+
+        producer = self.first_map_exit
+        readers = dict.fromkeys(
+            read.dst
+            for write in graph.out_edges(producer)
+            if isinstance(write.dst, dace_nodes.AccessNode) and not write.dst.desc(sdfg).transient
+            for read in graph.out_edges(write.dst)
+            if isinstance(read.dst, dace_nodes.MapEntry)
+        )
+        if len(readers) < 2:
+            return super().apply(graph, sdfg)
+
+        def is_competitor(
+            match: VerticalSplitMapRange,
+            _first: dace_nodes.MapExit,
+            _second: dace_nodes.MapEntry,
+            _state: dace.SDFGState,
+            owner: dace.SDFG,
+        ) -> bool:
+            return (
+                match.first_map_exit is producer
+                and match.second_map_entry is not self.second_map_entry
+                and not match.access_node.desc(owner).transient
+            )
+
+        # Only rank consumers that pass the existing split safety checks.
+        legal = {self.second_map_entry: self}
+        for match in dace_matching.match_patterns(
+            sdfg,
+            [VerticalSplitMapRange],
+            states=[graph],
+            options=[{**self._options, "check_split_callback": is_competitor}],
+        ):
+            legal.setdefault(match.second_map_entry, match)
+        if len(legal) == 1:
+            return super().apply(graph, sdfg)
+
+        choices = [entry for entry in readers if entry in legal]
+        costs = {entry: _read_cost(graph, entry) for entry in choices}
+        best = min(choices, key=lambda entry: costs[entry].key)
+        # An opaque reader may contain more indirect reads than we can see.
+        # Change graph order only when even those lower bounds establish a winner.
+        if not costs[best].complete or any(
+            costs[best].key == costs[other].key for other in choices if other is not best
+        ):
+            best = choices[0]
+        return VerticalSplitMapRange.apply(legal[best], graph, sdfg)
 
 
 def _check_shared_output_options(

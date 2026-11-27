@@ -20,7 +20,9 @@ from gt4py.next.program_processors.runners.dace.transformations import map_fusio
 from . import util
 
 
-def _make_sdfg(*, upper_consumer=True, later_state=False, consumer_start=1):
+def _make_sdfg(
+    *, upper_consumer=True, later_state=False, consumer_start=1, upper_start=3, indexed_reader=None
+):
     sdfg = dace.SDFG("shared_output_bands")
     for name in ("input", "theta", "rho", "wind"):
         sdfg.add_array(name, [6, 12], dace.float64)
@@ -37,16 +39,23 @@ def _make_sdfg(*, upper_consumer=True, later_state=False, consumer_start=1):
         external_edges=True,
     )
     consumers = []
-    for name, bounds, factor in [("lower", "0:3", 3), ("upper", "3:12", 4)]:
+    for name, bounds, factor in [("lower", "0:3", 3), ("upper", f"{upper_start}:12", 4)]:
         if name == "upper" and not upper_consumer:
             continue
+        inputs = {"t": dace.Memlet("theta[i,k]")}
+        input_nodes = {access["theta"]}
+        code = f"w = t * {factor}"
+        if name == indexed_reader:
+            inputs["values"] = dace.Memlet("input[0:6,0:12]")
+            input_nodes.add(access["input"])
+            code = "w = values[int(t) % 6, k]"
         _, entry, _ = state.add_mapped_tasklet(
             name,
             {"i": f"{consumer_start}:5", "k": bounds},
-            {"t": dace.Memlet("theta[i,k]")},
-            f"w = t * {factor}",
+            inputs,
+            code,
             {"w": dace.Memlet("wind[i,k]")},
-            input_nodes={access["theta"]},
+            input_nodes=input_nodes,
             output_nodes={access["wind"]},
             external_edges=True,
         )
@@ -191,6 +200,44 @@ def test_shared_output_split_respects_callback():
         == 0
     )
     assert sdfg.to_json() == before
+
+
+@pytest.mark.parametrize(
+    "upper_first, lower_eligible, indexed_reader, expected_remainder",
+    [
+        (False, True, None, "1:5, 3:12"),
+        (True, True, None, "1:5, 0:7"),
+        (False, False, None, "1:5, 0:7"),
+        (False, True, "lower", "1:5, 0:7"),
+        (True, True, "upper", "1:5, 3:12"),
+    ],
+)
+def test_shared_output_consumer_order(
+    upper_first, lower_eligible, indexed_reader, expected_remainder
+):
+    # Leave a gap between the two consumers so their splits produce different map ranges.
+    sdfg, state, access, _, _, consumers = _make_sdfg(upper_start=7, indexed_reader=indexed_reader)
+    if not lower_eligible:
+        # This consumer also needs a horizontal split. Only k splits are enabled below.
+        consumers[0].map.range = dace.subsets.Range.from_string("2:5, 0:3")
+        dace.sdfg.propagation.propagate_memlets_state(sdfg, state)
+    if upper_first:
+        lower = state.out_edges(access["theta"])[0]
+        state.remove_edge(lower)
+        state.add_edge(lower.src, lower.src_conn, lower.dst, lower.dst_conn, lower.data)
+
+    gtx_transformations.gt_vertical_map_split_fusion(
+        sdfg,
+        run_simplify=False,
+        run_map_fusion=False,
+        consolidate_edges_only_if_not_extending=True,
+        fuse_map_fragments=True,
+        allow_shared_output=True,
+        shared_output_split_dimension="k",
+        validate_all=True,
+    )
+    maps = [node.map for node in state.nodes() if isinstance(node, dace_nodes.MapEntry)]
+    assert expected_remainder in {str(map_.range) for map_ in maps}
 
 
 def test_shared_output_split_can_be_selected_by_optimizer_hook():
