@@ -261,6 +261,39 @@ def test_make_toolchain_derives_workspace_and_memory_mode_from_one_config():
     assert backend.executor.compilation.bind_func_name == cfg.bind_func_name
 
 
+@pytest.mark.parametrize(
+    "gpu, expected_mode",
+    [
+        (False, gtx_transformations.TransientMemoryMode.PERSISTENT),
+        (True, gtx_transformations.TransientMemoryMode.POOL),
+    ],
+    ids=["CPU", "GPU"],
+)
+def test_translator_default_transient_memory_mode(gpu, expected_mode):
+    # Building the translator does not need a GPU, so the GPU case also runs without CuPy.
+    translator = dace_wf_factory.make_dace_translator(dace_wf_factory.DaCeConfig(gpu=gpu))
+
+    assert translator.auto_optimize_args["transient_memory_mode"] == expected_mode
+
+
+@pytest.mark.parametrize("gpu", [False, True], ids=["CPU", "GPU"])
+@pytest.mark.parametrize(
+    "transient_memory_mode",
+    [
+        mode
+        for mode in gtx_transformations.TransientMemoryMode
+        if mode is not gtx_transformations.TransientMemoryMode.EXTERNAL
+    ],
+)
+def test_translator_keeps_explicit_transient_memory_mode(gpu, transient_memory_mode):
+    translator = dace_wf_factory.make_dace_translator(
+        dace_wf_factory.DaCeConfig(gpu=gpu),
+        auto_optimize_args={"transient_memory_mode": transient_memory_mode},
+    )
+
+    assert translator.auto_optimize_args["transient_memory_mode"] == transient_memory_mode
+
+
 def test_make_toolchain_rejects_derived_optimization_args():
     with pytest.raises(ValueError, match="cannot be overridden"):
         dace_wf_backend.make_dace_toolchain(
