@@ -181,3 +181,4 @@ print(d_phi.asnumpy().max())
   - [Programs](dsl/programs.md): grouping several operator calls.
 - [Executing GT4Py programs](python/running.md): embedded execution,
   backends and compilation.
+- [Examples](examples/index.md): complete, small applications.
