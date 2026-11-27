@@ -104,11 +104,12 @@ def make_dace_translator(
                 "External memory workspace must be provided when 'transient_memory_mode' is 'EXTERNAL'."
             )
         elif optimization_args.get("transient_memory_mode") is None:
-            # For the GPU backend, we default to POOL lifetime for temporary arrays, which allows
-            # to reuse memory across multiple program executions.
-            # For the CPU backend, we default to PERSISTENT lifetime for temporary arrays
-            # when no external workspace is provided. This allows to avoid unnecessary allocations
-            # and deallocations of temporary arrays, each time the program is executed.
+            # For the GPU backend, when no external workspace is provided, we default
+            # to POOL lifetime for temporary arrays, which allows to reuse memory across
+            # multiple program executions.
+            # For the CPU backend, we default to PERSISTENT lifetime for temporary arrays.
+            # This allows to avoid unnecessary allocations and deallocations of temporary
+            # arrays, each time the program is executed.
             if cfg.gpu:
                 optimization_args["transient_memory_mode"] = (
                     gtx_transformations.TransientMemoryMode.POOL
