@@ -16,7 +16,6 @@ from collections.abc import Callable
 from typing import Any, ClassVar, Final, TypeAlias
 
 import gt4py
-from gt4py import next as gtx
 from gt4py.next import backend as next_backend, config
 from gt4py.next.otf import artifacts, recipes, stages, workflow
 from gt4py.next.otf.compilation import cache
@@ -105,19 +104,18 @@ def make_dace_translator(
                 "External memory workspace must be provided when 'transient_memory_mode' is 'EXTERNAL'."
             )
         elif optimization_args.get("transient_memory_mode") is None:
-            # For the CPU backend, we default to PERSISTENT lifetime or temporary arrays
-            # when no external workspace is provided. This allows to avoid unnecessary allocations
-            # and deallocations of temporary arrays, each time the program is executed.
             # For the GPU backend, we default to POOL lifetime for temporary arrays, which allows
             # to reuse memory across multiple program executions.
-            if cfg.device_type == gtx.DeviceType.CPU:
-                optimization_args["transient_memory_mode"] = (
-                    gtx_transformations.TransientMemoryMode.PERSISTENT
-                )
-            else:
-                assert cfg.device_type == gtx.CUPY_DEVICE_TYPE
+            # For the CPU backend, we default to PERSISTENT lifetime for temporary arrays
+            # when no external workspace is provided. This allows to avoid unnecessary allocations
+            # and deallocations of temporary arrays, each time the program is executed.
+            if cfg.gpu:
                 optimization_args["transient_memory_mode"] = (
                     gtx_transformations.TransientMemoryMode.POOL
+                )
+            else:
+                optimization_args["transient_memory_mode"] = (
+                    gtx_transformations.TransientMemoryMode.PERSISTENT
                 )
 
     elif transient_memory_mode := optimization_args.get("transient_memory_mode"):
