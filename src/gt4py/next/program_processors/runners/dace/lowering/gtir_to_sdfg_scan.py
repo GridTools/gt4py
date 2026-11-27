@@ -344,7 +344,7 @@ def _handle_dataflow_result_of_nested_sdfg(
     # The field is used outside the nested SDFG, therefore it needs to be copied
     # to a temporary array in the parent SDFG (outer context).
     field_dims, _field_origin, field_shape = gtir_domain.get_field_layout(
-        gtir_domain.get_field_domain(output_domain)
+        gtir_domain.get_field_domain(output_domain, sdfg_builder.get_symbolic_domain_bound)
     )
     scan_dim_index = [sdfg_builder.is_column_axis(dim) for dim in field_dims].index(True)
     scan_column_size = field_shape[scan_dim_index]
@@ -454,7 +454,8 @@ def translate_scan_fieldop(
     # parse the domain of the scan field operator
     assert isinstance(scan_domain_expr.type, ts.DomainType)
     field_domain = gtir_domain.get_field_domain(
-        domain_utils.SymbolicDomain.from_expr(scan_domain_expr)
+        domain_utils.SymbolicDomain.from_expr(scan_domain_expr),
+        sdfg_builder.get_symbolic_domain_bound,
     )
 
     # parse scan parameters

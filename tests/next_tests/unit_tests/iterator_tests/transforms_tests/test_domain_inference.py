@@ -8,6 +8,7 @@
 
 # TODO(SF-N): test scan operator
 
+import functools
 from typing import Iterable, Literal, Optional
 
 import numpy as np
@@ -22,8 +23,9 @@ from gt4py.next.iterator.ir_utils import (
     domain_utils,
     ir_makers as im,
 )
-from gt4py.next.iterator.transforms import infer_domain
+from gt4py.next.iterator.transforms import concat_where, infer_domain
 from gt4py.next.iterator.transforms.constant_folding import ConstantFolding
+from gt4py.next.iterator.transforms.inline_lambdas import InlineLambdas
 from gt4py.next.type_system import type_specifications as ts
 
 
@@ -1405,6 +1407,62 @@ def test_concat_where_shift_in_never_selected_branch_shared():
     folded_call = constant_fold_domain_exprs(actual_call)
     assert expected == folded_call
     assert expected_domains == constant_fold_accessed_domains(actual_domains)
+
+
+def _evaluate_domain_expr(domain: itir.Expr, **symbols: int) -> itir.Expr:
+    """Evaluate a symbolic domain expression for concrete values of its symbols."""
+    return ConstantFolding.apply(InlineLambdas.apply(im.let(*symbols.items())(domain)))
+
+
+@pytest.mark.parametrize(
+    "boundary_levels, shifts, expected_stencil_domain",
+    [
+        # bottom level: `concat_where(KDim == 0, a, a(KDim - 1))`
+        ((0,), (-1,), (1, 10)),
+        # top level: `concat_where(KDim == n - 1, a, a(KDim + 1))`, the case of #2205
+        ((im.minus("n", 1),), (1,), (0, 9)),
+        # both: `concat_where(KDim == 0, a, concat_where(KDim == n - 1, a, a(KDim - 1) + a(KDim + 1)))`
+        ((0, im.minus("n", 1)), (-1, 1), (1, 9)),
+    ],
+)
+def test_concat_where_shift_in_never_selected_branch_symbolic(
+    boundary_levels, shifts, expected_stencil_domain
+):
+    # Symbolic variant of `test_concat_where_shift_in_never_selected_branch_shared`: the
+    # canonicalization of `KDim == c` selects the shifted branch on two regions, `[0, c[` and
+    # `[c + 1, n[`, one of which is empty if `c` is the first or the last level, but this is only
+    # known at runtime. The empty region must not extend the domain of the shifted branch to `c`,
+    # where it reads `a` outside of `[0, n[`.
+    domain = im.domain(common.GridType.CARTESIAN, {KDim: (0, "n")})
+    stencil = im.lambda_("t")(
+        functools.reduce(im.plus, [im.deref(im.shift(Koff, s)("t")) for s in shifts])
+    )
+    testee: itir.Expr = im.as_fieldop(stencil)("a")
+    for level in reversed(boundary_levels):
+        testee = im.concat_where(
+            im.domain(common.GridType.CARTESIAN, {KDim: (level, im.plus(level, 1))}),
+            im.as_fieldop("deref")("a"),
+            testee,
+        )
+    testee = concat_where.canonicalize_domain_argument(testee)
+
+    actual_call, actual_domains = infer_domain.infer_expr(
+        testee, domain_utils.SymbolicDomain.from_expr(domain), offset_provider={}
+    )
+
+    (stencil_domain,) = [
+        node.fun.args[1]
+        for node in actual_call.pre_walk_values().if_isinstance(itir.FunCall)
+        if cpm.is_applied_as_fieldop(node) and node.fun.args[0] == stencil
+    ]
+    assert _evaluate_domain_expr(stencil_domain, n=10) == im.domain(
+        common.GridType.CARTESIAN, {KDim: expected_stencil_domain}
+    )
+    # `a` is only accessed inside of `[0, n[`
+    accessed_a = domain_utils.SymbolicDomain.from_expr(
+        _evaluate_domain_expr(actual_domains["a"].as_expr(), n=10)
+    ).ranges[KDim]
+    assert 0 <= int(accessed_a.start.value) and int(accessed_a.stop.value) <= 10
 
 
 def test_concat_where_unstructured_shift_in_never_selected_branch(unstructured_offset_provider):

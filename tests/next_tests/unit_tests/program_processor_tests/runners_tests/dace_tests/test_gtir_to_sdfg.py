@@ -2191,6 +2191,160 @@ def test_gtir_concat_where():
         np.allclose(c, ref)
 
 
+@pytest.mark.parametrize(
+    "boundary_indices, shifts",
+    [((0,), (-1,)), ((im.minus("size", 1),), (1,)), ((0, im.minus("size", 1)), (-1, 1))],
+)
+def test_gtir_concat_where_shifted_branch_no_out_of_bounds_read(boundary_indices, shifts):
+    # `concat_where(IDim == 0, x, concat_where(IDim == size - 1, x, x(IDim - 1) + x(IDim + 1)))`
+    # with `x` of size `size`: the shifted branch must only be computed where it is selected, as it
+    # reads outside of `x` on the boundary indices. Whether a boundary index is the first or the
+    # last index is only known at runtime. The SDFG is only lowered, not compiled.
+    stencil = im.lambda_("a")(
+        functools.reduce(im.plus, [im.deref(im.shift(IOff, s)("a")) for s in shifts])
+    )
+    expr = im.as_fieldop(stencil)("x")
+    for index in reversed(boundary_indices):
+        expr = im.concat_where(
+            im.domain(gtx_common.GridType.CARTESIAN, {IDim: (index, im.plus(index, 1))}), "x", expr
+        )
+    testee = gtir.Program(
+        id="gtir_concat_where_shifted_branch_no_out_of_bounds_read",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="x", type=IFTYPE),
+            gtir.Sym(id="y", type=IFTYPE),
+            gtir.Sym(id="size", type=SIZE_TYPE),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=expr,
+                domain=im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, "size")}),
+                target=gtir.SymRef(id="y"),
+            )
+        ],
+    )
+    # the transformations applied by the dace backend before lowering, including domain inference
+    testee = pass_manager.apply_fieldview_transforms(testee, offset_provider=CARTESIAN_OFFSETS)
+
+    sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS, skip_domain_inference=True)
+
+    # the subsets of `x` read by the maps, i.e., the memlets propagated to the map entries
+    read_subsets = [
+        edge.data.subset
+        for state in sdfg.states()
+        for node in state.nodes()
+        if isinstance(node, dace.nodes.MapEntry)
+        for edge in state.in_edges(node)
+        if edge.data.data == "x"
+    ]
+    assert read_subsets
+    # the domain bounds with runtime conditions are computed on the program entry edge
+    values = {"size": N, "__x_IDim_range_0": 0, "__x_IDim_range_1": N}
+    values |= _domain_bound_values(sdfg, values)
+    for subset in read_subsets:
+        ((start, stop, _),) = subset.ndrange()
+        assert 0 <= int(start.subs(values)) and int(stop.subs(values)) <= N - 1
+
+
+def _domain_bound_values(sdfg: dace.SDFG, values: dict[str, int]) -> dict[str, int]:
+    """Evaluate the symbols assigned on the interstate edges of `sdfg`, given `values`."""
+    result = {}
+    for edge in sdfg.all_interstate_edges():
+        for name, value in edge.data.assignments.items():
+            result[name] = int(dace.symbolic.pystr_to_symbolic(value).subs(values | result))
+    return result
+
+
+def _symbolic_expressions_with_conditionals(sdfg: dace.SDFG) -> list[str]:
+    """
+    Return the conditional expressions (`IfExpr`) in the map ranges, memlet subsets, array shapes
+    and nested SDFG symbol mappings of `sdfg` and its nested SDFGs.
+    """
+
+    def conditionals(exprs: Any) -> list[str]:
+        return [
+            str(expr)
+            for expr in exprs
+            if dace.symbolic.issymbolic(expr) and expr.has(dace.symbolic.IfExpr)
+        ]
+
+    def range_exprs(subset: dace.subsets.Subset | None) -> list[Any]:
+        if subset is None:
+            return []
+        return [expr for dim in subset.ndrange() for expr in dim]
+
+    found = []
+    for nsdfg in sdfg.all_sdfgs_recursive():
+        for desc in nsdfg.arrays.values():
+            found += conditionals(desc.shape)
+        for state in nsdfg.states():
+            for node in state.nodes():
+                if isinstance(node, dace.nodes.MapEntry):
+                    found += conditionals(range_exprs(node.map.range))
+                elif isinstance(node, dace.nodes.NestedSDFG):
+                    found += conditionals(
+                        dace.symbolic.pystr_to_symbolic(value)
+                        for value in node.symbol_mapping.values()
+                    )
+            for edge in state.edges():
+                found += conditionals(range_exprs(edge.data.subset))
+                found += conditionals(range_exprs(edge.data.other_subset))
+    return found
+
+
+@pytest.mark.parametrize("dims", [(IDim,), (IDim, JDim)])
+def test_gtir_concat_where_boundaries_with_dynamic_domain(dims):
+    # `concat_where(IDim == 0, b, concat_where(IDim == size_0 - 1, b, concat_where(JDim == 0, ...)))`
+    # with scalar `b` on a domain only known at runtime (the shape of `out` and the sizes
+    # `size_*` are independent), like `test_lap_like` in the feature tests with dynamic domains.
+    # The regions of the inner `concat_where` are guarded with runtime conditions (they may be
+    # empty), which DaCe lowers to conditional expressions. SymPy cannot simplify comparisons
+    # of these: the lowering failed in memlet propagation (`AttributeError: 'GreaterThan' object
+    # has no attribute 'diff'`) or took very long. The conditional domain bounds must only be
+    # computed on the program entry edge, so that the rest of the SDFG only uses symbols.
+    field_type = ts.FieldType(dims=list(dims), dtype=FLOAT_TYPE)
+    sizes = [f"size_{i}" for i in range(len(dims))]
+    expr = im.ref("inp")
+    for dim, size in reversed(list(zip(dims, sizes))):
+        for index in reversed([im.literal_from_value(np.int32(0)), im.minus(size, 1)]):
+            expr = im.concat_where(
+                im.domain(gtx_common.GridType.CARTESIAN, {dim: (index, im.plus(index, 1))}),
+                "b",
+                expr,
+            )
+    testee = gtir.Program(
+        id=f"gtir_concat_where_boundaries_with_dynamic_domain_{len(dims)}d",
+        function_definitions=[],
+        params=[
+            gtir.Sym(id="inp", type=field_type),
+            gtir.Sym(id="b", type=FLOAT_TYPE),
+            *(gtir.Sym(id=size, type=SIZE_TYPE) for size in sizes),
+            gtir.Sym(id="out", type=field_type),
+        ],
+        declarations=[],
+        body=[
+            gtir.SetAt(
+                expr=expr,
+                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "out", dims),
+                target=gtir.SymRef(id="out"),
+            )
+        ],
+    )
+    testee = pass_manager.apply_fieldview_transforms(testee, offset_provider=CARTESIAN_OFFSETS)
+
+    sdfg = build_dace_sdfg(testee, CARTESIAN_OFFSETS, skip_domain_inference=True)
+
+    assert not _symbolic_expressions_with_conditionals(sdfg)
+    assignments = [
+        value for edge in sdfg.all_interstate_edges() for value in edge.data.assignments.values()
+    ]
+    assert any(
+        dace.symbolic.pystr_to_symbolic(value).has(dace.symbolic.IfExpr) for value in assignments
+    )
+
+
 def test_gtir_concat_where_two_dimensions():
     M, N = (30, 20)
     domain = im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, 30), JDim: (0, 20)})

@@ -9,7 +9,7 @@
 from __future__ import annotations
 
 import dataclasses
-from typing import Optional, Sequence, TypeAlias
+from typing import Callable, Optional, Sequence, TypeAlias
 
 import dace
 from dace import subsets as dace_subsets
@@ -42,19 +42,29 @@ FieldopDomain: TypeAlias = list[FieldopDomainRange]
 """Domain of a field operator represented as a list of `FieldopDomainRange` for each dimension."""
 
 
-def get_field_domain(domain: domain_utils.SymbolicDomain) -> FieldopDomain:
+def get_field_domain(
+    domain: domain_utils.SymbolicDomain,
+    get_symbolic_bound: Callable[
+        [gtir.Expr], dace.symbolic.SymbolicType
+    ] = gtir_to_sdfg_utils.get_symbolic,
+) -> FieldopDomain:
     """
     Visits the domain of a field operator and returns a list of dimensions and
     the corresponding lower and upper bounds. The returned lower bound is inclusive,
     the upper bound is exclusive, i.e. `[lower_bound, upper_bound[`
 
     Note that the doman dimensions are sorted in gt4py canonical order.
+
+    Args:
+        domain: The domain of the field operator.
+        get_symbolic_bound: The function used to convert the range bounds to dace
+            symbolic expressions. The lowering uses `SDFGBuilder.get_symbolic_domain_bound`.
     """
     return [
         FieldopDomainRange(
             dim,
-            gtir_to_sdfg_utils.get_symbolic(domain.ranges[dim].start),
-            gtir_to_sdfg_utils.get_symbolic(domain.ranges[dim].stop),
+            get_symbolic_bound(domain.ranges[dim].start),
+            get_symbolic_bound(domain.ranges[dim].stop),
         )
         for dim in gtx_common.order_dimensions(domain.ranges.keys())
     ]

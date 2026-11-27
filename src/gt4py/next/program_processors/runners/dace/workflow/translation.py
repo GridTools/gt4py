@@ -465,6 +465,11 @@ class DaCeTranslator(
 
         sdfg = gtx_dace_lowering.lower_program_to_sdfg(ir, offset_provider_type, column_axis)
 
+        # Domain bounds with runtime conditions are SDFG symbols computed on the program
+        #  entry edge. They are kept as free symbols while the SDFG is transformed, as
+        #  otherwise symbol and constant propagation would substitute their values back.
+        domain_bounds = gtx_dace_lowering.detach_domain_bound_symbols(sdfg)
+
         constant_symbols = find_constant_symbols(
             ir,
             sdfg,
@@ -503,6 +508,8 @@ class DaCeTranslator(
             gtx_transformations.gt_substitute_compiletime_symbols(
                 sdfg, constant_symbols, validate=True
             )
+
+        gtx_dace_lowering.attach_domain_bound_symbols(sdfg, domain_bounds, constant_symbols)
 
         if self.async_sdfg_call:
             make_sdfg_call_async(sdfg, on_gpu)

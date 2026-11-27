@@ -22,6 +22,7 @@ from gt4py.next.iterator import ir as itir
 from gt4py.next.iterator.ir_utils import ir_makers as im
 from gt4py.next.otf import arguments as otf_arguments, workflow as otf_workflow
 from gt4py.next.program_processors.runners.dace import lowering as gtx_dace_lowering
+from gt4py.next.program_processors.runners.dace.lowering import gtir_to_sdfg
 from gt4py.next.program_processors.runners.dace.workflow import (
     translation as dace_wf_translation,
     common as dace_wf_common,
@@ -524,3 +525,85 @@ def test_translation_source_code_invariant_under_guid_change():
     first_source_fingerprint = fingerprinting.strict_fingerprinter(first_source)
     second_source_fingerprint = fingerprinting.strict_fingerprinter(second_source)
     assert first_source_fingerprint == second_source_fingerprint
+
+
+@pytest.mark.parametrize("auto_optimize", [False, True])
+@pytest.mark.parametrize("disable_field_origin", [False, True])
+def test_generate_sdfg_domain_bounds_with_runtime_conditions(
+    auto_optimize: bool, disable_field_origin: bool, device_type: core_defs.DeviceType
+):
+    # `concat_where(IDim == 0, b, concat_where(IDim == size - 1, b, x))` with a scalar `b` and the
+    # domain of `y` only known at runtime, like `test_lap_like` in the feature tests with dynamic
+    # domains. The regions of the inner `concat_where` may be empty at runtime, so their bounds
+    # contain runtime conditions. These must be SDFG symbols, computed on the program entry
+    # edges, also after the SDFG transformations (symbol and constant propagation would
+    # substitute them back), so that SymPy never sees conditional expressions.
+    size_type = ts.ScalarType(kind=ts.ScalarKind.INT32)
+    ir = itir.Program(
+        id=f"domain_bounds_with_runtime_conditions_{auto_optimize}_{disable_field_origin}",
+        function_definitions=[],
+        params=[
+            itir.Sym(id="x", type=IFTYPE),
+            itir.Sym(id="b", type=FLOAT_TYPE),
+            itir.Sym(id="size", type=size_type),
+            itir.Sym(id="y", type=IFTYPE),
+        ],
+        declarations=[],
+        body=[
+            itir.SetAt(
+                expr=im.concat_where(
+                    im.domain(gtx_common.GridType.CARTESIAN, {IDim: (0, 1)}),
+                    "b",
+                    im.concat_where(
+                        im.domain(
+                            gtx_common.GridType.CARTESIAN, {IDim: (im.minus("size", 1), "size")}
+                        ),
+                        "b",
+                        "x",
+                    ),
+                ),
+                domain=im.get_field_domain(gtx_common.GridType.CARTESIAN, "y", IFTYPE.dims),
+                target=itir.SymRef(id="y"),
+            )
+        ],
+    )
+
+    with dace.config.set_temporary("cache", value="hash"):
+        sdfg = dace_wf_translation.DaCeTranslator(
+            device_type=device_type,
+            auto_optimize=auto_optimize,
+            auto_optimize_args=None,
+            async_sdfg_call=False,
+            unstructured_horizontal_has_unit_stride=False,
+            use_metrics=False,
+            disable_field_origin_on_program_arguments=disable_field_origin,
+        ).generate_sdfg(ir, offset_provider={}, column_axis=None)
+
+    assignments = {
+        name: value
+        for edge in sdfg.all_interstate_edges()
+        for name, value in edge.data.assignments.items()
+        if name.startswith(gtir_to_sdfg.DOMAIN_BOUND_SYMBOL_PREFIX)
+    }
+    assert assignments
+    assert set(assignments).isdisjoint(str(sym) for sym in sdfg.free_symbols)
+    if disable_field_origin:
+        # the range start symbols are replaced by 0, also in the assignments
+        assert not any("__y_IDim_range_0" in value for value in assignments.values())
+
+    def has_conditional(subset: dace.subsets.Subset | None) -> bool:
+        return subset is not None and any(
+            dace.symbolic.issymbolic(expr) and expr.has(dace.symbolic.IfExpr)
+            for dim in subset.ndrange()
+            for expr in dim
+        )
+
+    for nsdfg in sdfg.all_sdfgs_recursive():
+        for state in nsdfg.states():
+            for node in state.nodes():
+                if isinstance(node, dace_nodes.MapEntry):
+                    assert not has_conditional(node.map.range)
+            for edge in state.edges():
+                assert not has_conditional(edge.data.subset)
+                assert not has_conditional(edge.data.other_subset)
+    sdfg.validate()

@@ -93,6 +93,51 @@ def test_trivial(uids: utils.IDGeneratorPool):
     assert actual == expected
 
 
+def test_scalar_if_in_domain(uids: utils.IDGeneratorPool):
+    # The bounds of an inferred domain can contain a scalar `if_`, e.g. when the domain is the
+    # union of `concat_where` regions which are empty at runtime. Only field-valued `if_` calls
+    # are extracted into temporaries.
+    domain = im.domain("cartesian_domain", {IDim: (0, "n")})
+    tmp_domain = im.domain(
+        "cartesian_domain", {IDim: (im.if_(im.greater_equal(0, "n"), "n", 0), "n")}
+    )
+    offset_provider = {}
+    params = [
+        im.sym("inp", i_field_type),
+        im.sym("out", i_field_type),
+        im.sym("n", index_type),
+    ]
+    testee = program_factory(
+        params=params,
+        body=[
+            itir.SetAt(
+                target=im.ref("out"),
+                expr=im.as_fieldop("deref", domain)(im.as_fieldop("deref", tmp_domain)("inp")),
+                domain=domain,
+            )
+        ],
+    )
+    testee = type_inference.infer(testee, offset_provider_type=offset_provider)
+
+    expected = program_factory(
+        params=params,
+        declarations=[itir.Temporary(id="__tmp_0", domain=tmp_domain, dtype=float_type)],
+        body=[
+            itir.SetAt(
+                target=im.ref("__tmp_0"),
+                expr=im.as_fieldop("deref", tmp_domain)("inp"),
+                domain=tmp_domain,
+            ),
+            itir.SetAt(
+                target=im.ref("out"), expr=im.as_fieldop("deref", domain)("__tmp_0"), domain=domain
+            ),
+        ],
+    )
+
+    actual = global_tmps.create_global_tmps(testee, offset_provider, uids=uids)
+    assert actual == expected
+
+
 def test_trivial_let(uids: utils.IDGeneratorPool):
     domain = im.domain("cartesian_domain", {IDim: (0, 1)})
     offset_provider = {}

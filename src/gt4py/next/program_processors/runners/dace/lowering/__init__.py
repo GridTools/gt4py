@@ -7,7 +7,12 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 
-from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg import lower_program_to_sdfg
+from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg import (
+    DomainBoundSymbols,
+    attach_domain_bound_symbols,
+    detach_domain_bound_symbols,
+    lower_program_to_sdfg,
+)
 from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_utils import (
     flatten_tuple_fields,
     get_map_variable,
@@ -16,6 +21,9 @@ from gt4py.next.program_processors.runners.dace.lowering.gtir_to_sdfg_utils impo
 
 
 __all__ = [
+    "DomainBoundSymbols",
+    "attach_domain_bound_symbols",
+    "detach_domain_bound_symbols",
     "flatten_tuple_fields",
     "get_map_variable",
     "lower_program_to_sdfg",
