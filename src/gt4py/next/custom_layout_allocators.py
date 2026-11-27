@@ -162,7 +162,7 @@ def horizontal_first_layout_mapper(
 
     Dimensions are ordered by increasing stride as: horizontal, vertical, local. Within
     each kind, dimensions appearing earlier in `dims` get smaller strides, so the first
-    horizontal dimension is the contiguous one.
+    horizontal dimension is the innermost (stride-1) one.
     """
 
     def pos_of_kind(kind: common.DimensionKind) -> list[int]:
