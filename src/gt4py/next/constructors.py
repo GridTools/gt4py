@@ -19,6 +19,7 @@ import array_api_compat
 import gt4py.eve as eve
 import gt4py.next.common as common
 import gt4py.next.custom_layout_allocators as next_allocators
+import gt4py.next.embedded.array_ops as array_ops
 import gt4py.next.embedded.nd_array_field as nd_array_field
 from gt4py._core import definitions as core_defs, ndarray_utils as core_ndarray_utils
 from gt4py.eve import xtyping
@@ -74,8 +75,19 @@ class FieldConstructor:
         if allocator is None:
             if device is None:
                 device = DEFAULT_DEVICE
-            # Currently we use optimized CPU layout, but possibly we could also use standard numpy allocation
-            allocator = next_allocators.device_allocators[device.device_type]
+            if device.device_type == core_defs.DeviceType.METAL:
+                # only MLX allocates on Metal
+                try:
+                    import mlx.core as mx
+                except ImportError:
+                    raise ValueError(
+                        "Allocating on a 'METAL' device needs the 'mlx' package:"
+                        " install it, and pass 'allocator=mlx.core' or no allocator."
+                    ) from None
+                allocator = mx
+            else:
+                # Currently we use optimized CPU layout, but possibly we could also use standard numpy allocation
+                allocator = next_allocators.device_allocators[device.device_type]
         requested = allocator
         if next_allocators.is_field_allocator_factory(allocator):
             allocator = allocator.__gt_allocator__
@@ -261,9 +273,8 @@ class _ArrayAPIArrayConstructor(_FieldArrayConstructor, Generic[_ArrayNST]):
     device: Any = None
 
     def __post_init__(self) -> None:
-        object.__setattr__(
-            self, "array_ns", array_api_compat.array_namespace(self.array_ns.empty((1,)))
-        )
+        # the namespace field code computes with, which for MLX is not the library's module
+        object.__setattr__(self, "array_ns", array_ops.of(self.array_ns.empty((1,))).xp)
 
     def _to_array_ns_dtype(self, dtype: core_defs.DType) -> Any:
         return core_ndarray_utils.namespace_dtype(self.array_ns, dtype.scalar_type)
@@ -415,7 +426,8 @@ def empty(
             If both are given, `allocator` takes precedence over the default device allocator.
         device: The device (CPU, type of accelerator) to optimize the memory layout for.
             If neither `allocator` nor `device` is given, a default CPU device is used.
-            When only `device` is given, the default allocator for that device type is used.
+            When only `device` is given, the default allocator for that device type is used,
+            which is MLX (`mlx.core`) for a Metal device.
 
     Returns:
         A field, backed by a buffer with memory layout as specified by allocator and alignment requirements.
@@ -565,7 +577,8 @@ def as_field(
         origin: Only allowed if `domain` is a sequence of dimensions. The indicated index in `data`
             will be the zero point of the resulting field.
         allocator: An array namespace (e.g. ``numpy``) or an allocator / allocator factory (e.g. backend).
-            If not given, defaults to the device of `data` (if available) or the default CPU allocator.
+            If not given, defaults to the device of `data` (if available) or the default CPU allocator;
+            if neither `allocator` nor `device` is given, MLX arrays stay MLX arrays.
         device: The device to optimize memory layout for. If not given, defaults to the device
             of `data` (if available) or the default CPU device.
 
@@ -596,9 +609,15 @@ def as_field(
         >>> gtx.as_field({IDim: range(-1, 2)}, xdata).domain.ranges[0]
         UnitRange(-1, 2)
     """
-    if allocator is None and device is None and xtyping.supports_dlpack(data):
-        # allocate for the device of the input data if no explicit allocator or device is given
-        device = core_defs.Device(*data.__dlpack_device__())
+    if allocator is None and device is None:
+        if (
+            array_api_compat.is_array_api_obj(data)
+            and (own_allocator := array_ops.of(data).own_allocator) is not None
+        ):
+            allocator = own_allocator
+        elif xtyping.supports_dlpack(data):
+            # allocate for the device of the input data if no explicit allocator or device is given
+            device = core_defs.Device(*data.__dlpack_device__())
     return _field_constructor(allocator, aligned_index=aligned_index, device=device).as_field(
         domain=domain, data=data, dtype=dtype, origin=origin
     )
@@ -633,7 +652,8 @@ def as_connectivity(
         aligned_index: Index in the definition domain which should be used as reference
             point for memory alignment computations.
         allocator: An array namespace or an allocator / allocator factory (e.g. backend).
-            If not provided, defaults to the device of `data` or the default CPU allocator.
+            If not provided, defaults to the device of `data` or the default CPU allocator, as in
+            `as_field`.
         device: The device on which the connectivity will be allocated. If not provided,
             defaults to the device of `data` or the default CPU device.
         skip_value: The value that signals missing entries in the neighbor table. Defaults to the default

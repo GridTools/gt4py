@@ -57,6 +57,16 @@ def _is_torch_cuda_available() -> bool:
     return torch.cuda.is_available()
 
 
+def _is_mlx_metal_available() -> bool:
+    try:
+        import mlx.core as mx
+
+        return mx.metal.is_available()
+    except Exception:
+        # a missing or broken install must not abort the collection of every session
+        return False
+
+
 def _is_gpu_available() -> bool:
     """Check that a GPU device is actually usable, not merely that `cupy` is installed."""
     from gt4py._core import definitions as core_defs
@@ -71,6 +81,8 @@ _REQUIREMENT_PROBES: Final[dict[str, tuple[collections.abc.Callable[[], bool], s
     "requires_atlas": (lambda: _is_importable("atlas4py"), "the `atlas4py` package"),
     "requires_gpu": (_is_gpu_available, "`cupy` and a reachable GPU device"),
     "requires_jax": (lambda: _is_importable("jax"), "the `jax` package"),
+    "requires_mlx": (lambda: _is_importable("mlx.core"), "the `mlx` package"),
+    "requires_mlx_metal": (_is_mlx_metal_available, "`mlx` with a usable Metal device"),
     "requires_torch": (lambda: _is_importable("torch"), "the `torch` package"),
     "requires_torch_cuda": (_is_torch_cuda_available, "`torch` with a usable CUDA device"),
 }
@@ -135,3 +147,22 @@ def pytest_collection_modifyitems(
             # Not `in item.keywords`: that also holds every node *name* in the chain.
             if item.get_closest_marker(marker) is not None:
                 item.add_marker(skip_mark)
+
+
+@pytest.fixture(autouse=True, scope="session")
+def _mlx_default_device_cpu() -> collections.abc.Iterator[None]:
+    """Run on MLX's CPU device, which supports float64, unlike the GPU (the default on Macs).
+
+    The tests are written for float64. Tests on the GPU switch to it themselves.
+    """
+    try:
+        import mlx.core as mx
+    except Exception:
+        # missing, or a broken install, which the `requires_mlx` tests report
+        yield
+        return
+
+    default_device = mx.default_device()
+    mx.set_default_device(mx.cpu)
+    yield
+    mx.set_default_device(default_device)

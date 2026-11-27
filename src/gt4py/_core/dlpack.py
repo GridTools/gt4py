@@ -38,6 +38,7 @@ class DeviceType(enum.IntEnum):
 
     CPU = 1
     CUDA = 2
+    METAL = 8
     ROCM = 10
 
 

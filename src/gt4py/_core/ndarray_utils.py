@@ -33,6 +33,11 @@ try:
 except ImportError:
     jax = None
 
+try:
+    import mlx.core as mx
+except ImportError:
+    mx = None
+
 
 class _ArrayDType(Protocol):
     # The only requirement for array API dtypes is equality comparability.
@@ -135,9 +140,10 @@ def _dtype_tables(
     array_ns: ArrayNamespace,
 ) -> tuple[dict[type, _ArrayDType], dict[_ArrayDType, type]]:
     to_namespace = {
-        scalar_type: getattr(array_ns, name)
+        scalar_type: getattr(array_ns, name if hasattr(array_ns, name) else f"{name}_")
         for scalar_type, name in core_types.type_to_name.items()
-        if hasattr(array_ns, name)
+        # only `bool_` in NumPy 1.x and MLX
+        if hasattr(array_ns, name) or hasattr(array_ns, f"{name}_")
     }
     return to_namespace, {dtype: scalar_type for scalar_type, dtype in to_namespace.items()}
 
@@ -235,6 +241,44 @@ if jax is not None:
         raise ValueError(f"jax does not support device type {device.device_type}.")
 
     _device_translation_registry[cast(ArrayNamespace, jnp)] = _jax_device_translator
+
+
+if mx is not None:
+
+    def _mlx_device_translator(device: core_defs.Device | None) -> Any:
+        """
+        The MLX device for `device`, which has to be MLX's default device.
+
+        MLX arrays have no device: operations run on the default device, which GT4Py
+        never changes. `DeviceType.METAL` stands for `mlx.core.gpu` on Apple silicon; on
+        Linux CUDA builds of MLX, `mlx.core.gpu` is `DeviceType.CUDA`.
+
+        MLX's `__dlpack_device__` does not tell the device either: it reports Metal `(8, 0)`
+        whenever Metal is available, also for arrays computed on the CPU, and the CPU on CUDA
+        builds. `as_field` does not rely on it for MLX arrays, see `ArrayOps.own_allocator`.
+        """
+        if device is None:
+            return None
+        if device.device_type == core_defs.DeviceType.CPU:
+            mlx_device = mx.cpu
+        elif (device.device_type == core_defs.DeviceType.METAL and mx.metal.is_available()) or (
+            device.device_type == core_defs.DeviceType.CUDA
+            # `mlx.core.cuda` may be missing in builds without CUDA, as on macOS
+            and getattr(mx, "cuda", None) is not None
+            and mx.cuda.is_available()
+        ):
+            mlx_device = mx.gpu
+        else:
+            raise ValueError(f"MLX does not support device type {device.device_type}.")
+        default_device = mx.default_device()
+        if device.device_id != 0 or default_device != mlx_device:
+            raise ValueError(
+                f"MLX computes on its default device '{default_device}', not on '{device}': pass"
+                " no 'device', or change the default with 'mlx.core.set_default_device'."
+            )
+        return default_device
+
+    _device_translation_registry[cast(ArrayNamespace, mx)] = _mlx_device_translator
 
 
 def get_device_translator(array_ns: ArrayNamespace) -> Callable[[core_defs.Device | None], Any]:

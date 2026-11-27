@@ -395,7 +395,7 @@ class DeviceType(enum.IntEnum):
     # CPU_PINNED = 3    # noqa: ERA001
     # OPENCL = 4        # noqa: ERA001
     # VULKAN = 7        # noqa: ERA001
-    # METAL = 8         # noqa: ERA001
+    METAL = 8
     # VPI = 9           # noqa: ERA001
     ROCM = 10
     # CUDA_MANAGED = 13 # noqa: ERA001
@@ -405,6 +405,7 @@ class DeviceType(enum.IntEnum):
 CPUDeviceTyping: TypeAlias = Literal[DeviceType.CPU]
 CUDADeviceTyping: TypeAlias = Literal[DeviceType.CUDA]
 ROCMDeviceTyping: TypeAlias = Literal[DeviceType.ROCM]
+METALDeviceTyping: TypeAlias = Literal[DeviceType.METAL]
 
 
 DeviceTypeT = TypeVar(
@@ -412,6 +413,7 @@ DeviceTypeT = TypeVar(
     CPUDeviceTyping,
     CUDADeviceTyping,
     ROCMDeviceTyping,
+    METALDeviceTyping,
 )
 
 

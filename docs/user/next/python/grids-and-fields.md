@@ -160,6 +160,49 @@ temperature_gpu = gtx.zeros(plane, device=gpu)
 All the fields used in a call, including `out`, must be held by the same array
 library.
 
+#### MLX on Apple silicon
+
+[MLX](https://github.com/ml-explore/mlx) arrays are also supported, installed
+with `pip install "gt4py[mlx]"` (the Metal build on Apple-silicon macOS, a
+CPU-only build on Linux). Use `mlx.core` as the allocator, or the experimental
+backend `embedded_mlx`, imported from `gt4py.next.experimental`. An MLX array
+passed to `as_field` stays an MLX array:
+
+```python
+import mlx.core as mx
+from gt4py.next import experimental
+
+temperature_mlx = gtx.zeros(plane, dtype=gtx.float32, allocator=mx)
+pressure_mlx = gtx.zeros(plane, dtype=gtx.float32, allocator=experimental.embedded_mlx)
+```
+
+MLX has no per-array device: it runs everything on its default device, which
+GT4Py never changes. A `device` argument is accepted only if it names that
+device, `gtx.Device(gtx.DeviceType.CPU, 0)` or, on an Apple GPU,
+`gtx.Device(gtx.DeviceType.METAL, 0)`; anything else raises a `ValueError`.
+Select the device with `mx.set_default_device`. A Metal `device` without an
+`allocator` allocates with MLX.
+
+What to know when using it:
+
+- MLX does not support `float64` on the GPU, and the default dtype of GT4Py is
+  `float64`. On the GPU, pass `dtype=gtx.float32` to the constructors, and to
+  the `init` of a scan; requesting `float64` raises a `TypeError`. Dividing
+  integers with `/` gives `float64`, as with NumPy, so on the GPU it raises a
+  `TypeError` too: use `//`, or convert the operands to `float32`.
+- Values of different dtypes in an operation are promoted as MLX does, not as
+  NumPy: `int64` and `float32` give `float32`.
+- The `gamma` builtin is not available.
+- Slices of an MLX array are copies, so writing into a field that is the
+  slice of another one does not change the original. This also affects a sliced
+  field used as `out`.
+- Fields of MLX arrays work only in embedded execution, not with the `dace` and
+  `gtfn` backends.
+- MLX computes lazily. What operators and programs write to their outputs is
+  evaluated, but field expressions used directly outside of operators are not
+  until the data is read, with `asnumpy()` or `mx.eval`.
+- Scans work but are very slow.
+
 ## Reading the data
 
 A field gives access to its domain and to its data. `asnumpy()` always returns

@@ -72,6 +72,19 @@ def test_requires_jax_marker_is_enforced():
     importlib.import_module("jax")
 
 
+@pytest.mark.requires_mlx
+def test_requires_mlx_marker_is_enforced():
+    importlib.import_module("mlx.core")
+
+
+@pytest.mark.requires_mlx
+@pytest.mark.requires_mlx_metal
+def test_requires_mlx_metal_marker_is_enforced():
+    mx = importlib.import_module("mlx.core")
+    assert mx.metal.is_available()
+    assert int(mx.sum(mx.zeros((1,), stream=mx.gpu)).item()) == 0
+
+
 @pytest.mark.requires_torch
 def test_requires_torch_marker_is_enforced():
     importlib.import_module("torch")

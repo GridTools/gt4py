@@ -156,6 +156,10 @@ jax = [
 ]
 jax-cuda12 = ['jax[cuda12-local]>=0.7.0', 'gt4py[cuda12]']
 jax-cuda13 = ['jax[cuda13-local]>=0.7.0', 'gt4py[cuda13]']
+mlx = [
+  'mlx>=0.32.4 ; sys_platform == "darwin" and platform_machine == "arm64"',  # Metal backend
+  'mlx[cpu]>=0.32.4 ; sys_platform == "linux"'  # CPU-only backend
+]
 next = ['gt4py[jax,standard,testing]']
 rocm6 = ['cupy>=13.4.1,<14.0']
 rocm7 = ['cupy-rocm-7-0>=14.0']
@@ -246,6 +250,8 @@ markers = [
   'requires_atlas: tests that require `atlas4py` bindings package',
   'requires_gpu: tests that require a NVidia GPU (`cupy` and `cudatoolkit` are required)',
   'requires_jax: tests that require `jax` package',
+  'requires_mlx: tests that require `mlx` package',
+  'requires_mlx_metal: tests that require `mlx` with a usable Metal (Apple GPU) device',
   'requires_torch: tests that require `torch` package',
   'requires_torch_cuda: tests that require `torch` with a usable CUDA device',
   'uses_applied_shifts: tests that require backend support for applied-shifts',

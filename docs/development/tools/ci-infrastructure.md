@@ -26,6 +26,10 @@ A `Documentation` workflow builds the user documentation site with the `docs` no
 
 There is an extra CI workflow on GitHub scheduled to run daily and testing `main` with different sets of requirements: the `highest` and the `lowest-direct` `uv` resolution strategies. Failures are accessible in [GitHub web interface](https://github.com/GridTools/gt4py/actions/workflows/daily-ci.yml) and as the 'Daily CI' badge in the main [README.md](../../../README.md) file. Additionally, in case of failure a message _might_ be posted in the [#ci-notifications](https://app.slack.com/client/T0A5HP547/C0E145U65) channel of the GridTols slack, but those notifications do not work reliably.
 
+### MLX Metal tests
+
+The `Test MLX on Apple silicon (Metal)` workflow runs the tests marked `requires_mlx` or `requires_mlx_metal` on a `macos-latest` (Apple-silicon) runner. To limit the 10x macOS minutes cost, it only runs for pull requests touching MLX-relevant paths (see the workflow `paths` filter) or when started manually. Hosted runners expose a paravirtualized Metal device, so treat it as smoke-test quality; its first step prints the MLX device information to help diagnosing a missing device. It calls `pytest` directly (the nox sessions do not run `tests/core_tests`). The `test_next` nox session deselects `requires_mlx_metal` tests unless `GT4PY_TEST_MLX_METAL=1` is set, which is the way to run them locally on a Mac.
+
 ### AI-assisted PR review (PR Agent)
 
 A `PR Agent` workflow posts an advisory AI review on pull requests, using [PR Agent](https://github.com/The-PR-Agent/pr-agent) on the [CSCS inference service](https://docs.cscs.ch/services/inference/). It is a small caller of the reusable workflow in [GridTools/ci-workflows](https://github.com/GridTools/ci-workflows), pinned by commit SHA, which holds the pipeline; the key is in the `pr-agent` environment. It is never a required status check. Only `/review` runs automatically, for pull requests whose author has write access; users with write access can also invoke `/review`, `/improve`, `/ask` and `/describe` by commenting. See [pr-agent.md](pr-agent.md) for details.

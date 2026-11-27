@@ -6,8 +6,9 @@
 # Please, refer to the LICENSE file in the root directory.
 # SPDX-License-Identifier: BSD-3-Clause
 
+import contextvars
 import dataclasses
-from typing import Any, Callable, Generic, Optional, ParamSpec, Sequence, TypeVar
+from typing import Any, Callable, Generic, Optional, ParamSpec, Sequence, TypeVar, cast
 
 from typing_extensions import TypeIs
 
@@ -15,7 +16,12 @@ from gt4py import eve
 from gt4py._core import definitions as core_defs
 from gt4py.eve import xtyping
 from gt4py.next import common, errors, field_utils, named_collections, utils
-from gt4py.next.embedded import array_ops, common as embedded_common, context as embedded_context
+from gt4py.next.embedded import (
+    array_ops,
+    common as embedded_common,
+    context as embedded_context,
+    nd_array_field,
+)
 from gt4py.next.otf import arguments
 from gt4py.next.type_system import type_specifications as ts, type_translation
 
@@ -98,7 +104,32 @@ def _get_out_domain(out: xtyping.MaybeNestedInTuple[common.MutableField]) -> com
     )
 
 
+#: whether a field operator call is running, i.e. a call is nested in another one
+_in_field_operator_call: contextvars.ContextVar[bool] = contextvars.ContextVar(
+    "_in_field_operator_call", default=False
+)
+
+
 def field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) -> Optional[_R]:
+    if _in_field_operator_call.get():
+        return _field_operator_call(op, args, kwargs)
+    token = _in_field_operator_call.set(True)
+    try:
+        result = _field_operator_call(op, args, kwargs)
+    finally:
+        _in_field_operator_call.reset(token)
+    # the fields returned to a caller outside of any field operator are computed now, so that
+    # lazy array libraries do not build up a graph over all calls of e.g. a time loop
+    for value in utils.flatten_nested_tuple((arguments.extract(result),)):  # type: ignore[arg-type] # `result` is fields and scalars
+        if isinstance(value, nd_array_field.NdArrayField):
+            value = value.ndarray
+        elif not array_ops.is_0d_array(value):
+            continue
+        array_ops.of(value).evaluate(cast(core_defs.NDArrayObject, value))
+    return result
+
+
+def _field_operator_call(op: EmbeddedOperator[_R, _P], args: Any, kwargs: Any) -> Optional[_R]:
     if "out" in kwargs:
         # called from program or direct field_operator as program
         new_context_kwargs = {}

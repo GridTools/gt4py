@@ -6,7 +6,7 @@ the repo-wide [root `AGENTS.md`](../../../AGENTS.md).
 `gt4py.next` is the successor to `gt4py.cartesian`, targeting both structured
 and unstructured grids. Field operators and programs run in one of two modes:
 **embedded** — executed directly in Python on `Field`s (backed by NumPy /
-CuPy / JAX), with no lowering to the IR — or **compiled**, lowered through a
+CuPy / JAX / MLX), with no lowering to the IR — or **compiled**, lowered through a
 fixed toolchain to a backend:
 
 ```
@@ -27,7 +27,7 @@ field operators / programs (ffront)
   `iterator/embedded.py` runs the lowered IR directly and is what the
   `roundtrip` backend targets.
 - `embedded/` — field-level embedded execution: field operators evaluated
-  directly on NumPy / CuPy / JAX-backed `Field`s, without lowering to the IR.
+  directly on NumPy / CuPy / JAX / MLX-backed `Field`s, without lowering to the IR.
   Distinct from `iterator/embedded.py`, which runs one level lower.
 - `otf/` — on-the-fly compilation toolchain (workflow steps, caching,
   argument descriptors).
@@ -61,7 +61,7 @@ field operators / programs (ffront)
 
 ## Testing (read before adding next tests)
 
-Next tests run across a **backend matrix** (embedded NumPy/CuPy/JAX, `gtfn`,
+Next tests run across a **backend matrix** (embedded NumPy/CuPy/JAX/MLX, `gtfn`,
 `dace`, `roundtrip`). The matrix and the per-backend xfail/skip lists are the
 **test-exclusion matrix** (ADR 15) in
 [`tests/next_tests/definitions.py`](../../../tests/next_tests/definitions.py).
@@ -91,6 +91,6 @@ Next tests run across a **backend matrix** (embedded NumPy/CuPy/JAX, `gtfn`,
 - Run with `uv run pytest tests/next_tests/ -x -q`; matrix-level confidence
   comes from `uv run nox -s "test_next-<py>(...)"`. GPU sessions
   may be unavailable locally and will skip. Tests carrying a `requires_*`
-  marker (`requires_gpu`, `requires_jax`, `requires_atlas`)
+  marker (`requires_gpu`, `requires_jax`, `requires_mlx`, `requires_mlx_metal`, `requires_atlas`)
   are skipped automatically when that dependency is missing; pass
   `--require-optional-deps` to turn those skips back into real failures.

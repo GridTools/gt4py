@@ -11,6 +11,8 @@ import pytest
 from gt4py._core import definitions as core_defs
 from gt4py.next import common, constructors, field_utils
 
+from next_tests.unit_tests.conftest import is_mlx
+
 
 @pytest.mark.parametrize(
     "device_type",
@@ -25,7 +27,10 @@ def test_verify_device_field_type(nd_array_implementation_and_device_type, devic
 
     testee = constructors.as_field([common.Dimension("X")], nd_array_implementation.asarray([42.0]))
 
-    is_correct_device = compatible_device_type == device_type
+    # `as_field` keeps MLX arrays, which compiled backends cannot use on any device
+    is_correct_device = compatible_device_type == device_type and not is_mlx(
+        nd_array_implementation
+    )
     assert field_utils.verify_device_field_type(testee, device_type) == is_correct_device
 
 

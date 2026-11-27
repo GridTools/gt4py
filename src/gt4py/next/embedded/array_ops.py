@@ -17,7 +17,9 @@ arguments of elementwise functions, which `ArrayOps` passes for scalar operands.
 
 A library that needs different behaviour, or has a faster path outside the
 standard, subclasses `ArrayOps`, overrides only those methods and registers an
-instance for its compat namespace with `register`.
+instance for its compat namespace with `register`. A library without a conforming
+namespace, in `array_api_compat` or its own, registers one that wraps its module
+(MLX) under the namespace `array_api_compat` returns for its arrays.
 """
 
 from __future__ import annotations
@@ -83,6 +85,16 @@ class ArrayOps:
     def array_ns(self) -> ModuleType:
         """The library's own module, as exposed by `NdArrayField.array_ns`."""
         return self.xp
+
+    @property
+    def own_allocator(self) -> Any:
+        """
+        The allocator of `as_field` for an array of this namespace given without allocator or device.
+
+        `None` uses the default allocator of the device of the array, e.g. a NumPy array for
+        an array on the CPU.
+        """
+        return None
 
     def dtype(self, scalar_type: type) -> Any:
         return core_ndarray_utils.namespace_dtype(self.xp, core_defs.dtype(scalar_type).scalar_type)
@@ -199,6 +211,14 @@ class ArrayOps:
         array[key] = value  # type: ignore[index] # `NDArrayObject` typing is not complete
         return array
 
+    def evaluate(self, array: core_defs.NDArrayObject) -> None:
+        """
+        Compute the values of `array` now, for libraries that evaluate lazily (MLX).
+
+        Called on the fields a field operator returns to a caller outside of any field
+        operator, so that a caller iterating on them does not build up an ever larger graph.
+        """
+
     def take(
         self, array: core_defs.NDArrayObject, indices: core_defs.NDArrayObject, *, axis: int
     ) -> core_defs.NDArrayObject:
@@ -250,9 +270,13 @@ _ops_by_namespace: dict[ModuleType, ArrayOps] = {}
 _ops_by_array_type: dict[type, ArrayOps] = {}
 
 
-def register(ops: ArrayOps) -> None:
-    """Use `ops` for the buffers whose compat namespace is `ops.xp`, replacing an earlier registration."""
-    _ops_by_namespace[ops.xp] = ops
+def register(ops: ArrayOps, *, namespace: ModuleType | None = None) -> None:
+    """
+    Use `ops` for the buffers whose compat namespace is `namespace`, replacing an earlier registration.
+
+    `namespace` defaults to `ops.xp`.
+    """
+    _ops_by_namespace[ops.xp if namespace is None else namespace] = ops
     _ops_by_array_type.clear()
 
 

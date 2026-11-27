@@ -13,9 +13,9 @@ import importlib
 from . import numpy_ops as numpy_ops
 
 
-for _library in ("cupy", "jax", "torch"):
+for _library in ("cupy", "jax", "torch", "mlx.core"):
     try:
         importlib.import_module(_library)
     except ImportError:
         continue
-    importlib.import_module(f"{__name__}.{_library}_ops")
+    importlib.import_module(f"{__name__}.{_library.partition('.')[0]}_ops")

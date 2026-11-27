@@ -131,7 +131,7 @@ def test_empty(nd_array_implementation, dtype):
 
     result = ops.empty((2, 3), dtype=dtype)
 
-    assert array_api_compat.array_namespace(result) is ops.xp
+    assert array_ops.of(result) is ops
     assert result.shape == (2, 3)
     assert ops.scalar_type(result.dtype) is dtype
 
@@ -142,8 +142,8 @@ def test_empty_on_device_of_like(nd_array_implementation):
 
     result = ops.empty((2,), dtype=np.float64, like=like)
 
-    assert array_api_compat.array_namespace(result) is ops.xp
-    assert array_api_compat.device(result) == array_api_compat.device(like)
+    assert array_ops.of(result) is ops
+    assert ops.device(result) == ops.device(like)
 
 
 @pytest.mark.requires_torch

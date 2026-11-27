@@ -350,3 +350,134 @@ def test_torch_allocator_follows_default_device():
 
     assert field.ndarray.device.type == "cuda"
     assert zeros.ndarray.device.type == "cuda"
+
+
+@pytest.mark.requires_mlx
+@pytest.mark.parametrize("device", [None, core_defs.Device(core_defs.DeviceType.CPU, 0)])
+@pytest.mark.parametrize("dtype", [np.float64, np.float32, np.int64, np.bool_])
+def test_mlx_allocator(device, dtype):
+    import mlx.core as mx
+
+    data = np.arange(3).astype(dtype)
+    fields = [
+        gtx.as_field([I], data, allocator=mx, device=device),
+        gtx.zeros({I: 3}, dtype=dtype, allocator=mx, device=device),
+        gtx.full({I: 3}, dtype(1), allocator=mx, device=device),
+        gtx.empty({I: 3}, dtype=dtype, allocator=mx, device=device),
+    ]
+
+    for field in fields:
+        assert isinstance(field.ndarray, mx.array)
+        # no silent downcast of float64 to MLX's default float32
+        assert field.dtype == core_defs.dtype(dtype)
+    np.testing.assert_array_equal(fields[0].asnumpy(), data)
+
+
+@pytest.mark.requires_mlx
+def test_mlx_allocator_default_dtype_is_float64():
+    import mlx.core as mx
+
+    field = gtx.zeros({I: 3}, allocator=mx)
+
+    assert field.ndarray.dtype == mx.float64
+
+
+@pytest.mark.requires_mlx
+@pytest.mark.parametrize("dtype", ["float64", "float32", "int32", "bool_"])
+def test_as_field_keeps_mlx_arrays(dtype):
+    import mlx.core as mx
+
+    data = mx.zeros((3,), dtype=getattr(mx, dtype))
+
+    field = gtx.as_field([I], data)
+
+    assert isinstance(field.ndarray, mx.array)
+    assert field.ndarray.dtype == data.dtype
+    assert field.ndarray is not data  # a copy, as for every other library
+
+
+@pytest.mark.requires_mlx
+def test_as_connectivity_of_mlx_table():
+    import mlx.core as mx
+
+    table = mx.array([[0, 1], [1, common._DEFAULT_SKIP_VALUE]], dtype=mx.int32)
+
+    connectivity = gtx.as_connectivity(
+        [I, gtx.Dimension("IJ", kind=gtx.DimensionKind.LOCAL)], J, table
+    )
+
+    assert isinstance(connectivity.ndarray, mx.array)
+    assert connectivity.skip_value == common._DEFAULT_SKIP_VALUE
+    np.testing.assert_array_equal(connectivity.asnumpy(), np.array(table))
+
+
+@pytest.mark.requires_mlx
+def test_mlx_allocator_rejects_other_devices():
+    import mlx.core as mx
+
+    with pytest.raises(ValueError, match="default device"):
+        gtx.zeros({I: 3}, allocator=mx, device=core_defs.Device(core_defs.DeviceType.CPU, 1))
+
+
+@pytest.mark.requires_mlx
+def test_mlx_allocator_float64_on_gpu_raises(monkeypatch):
+    # MLX as on Apple silicon, whose default device is the GPU; no array is computed on it
+    import mlx.core as mx
+
+    monkeypatch.setattr(mx, "default_device", lambda: mx.Device(mx.gpu))
+
+    for create in (
+        lambda: gtx.zeros({I: 3}, allocator=mx),
+        lambda: gtx.as_field([I], np.arange(3.0), allocator=mx),
+        lambda: gtx.full({I: 3}, 1.0, allocator=mx),
+    ):
+        with pytest.raises(TypeError, match="float64.*dtype=float32.*set_default_device"):
+            create()
+    assert gtx.zeros({I: 3}, dtype=np.float32, allocator=mx).ndarray.dtype == mx.float32
+
+
+@pytest.mark.requires_mlx
+def test_embedded_mlx_backend_allocates_mlx():
+    import mlx.core as mx
+
+    from gt4py.next import experimental
+
+    field = gtx.zeros({I: 3}, allocator=experimental.embedded_mlx)
+
+    assert isinstance(field.ndarray, mx.array)
+
+
+@pytest.mark.requires_mlx
+def test_metal_device_without_allocator_allocates_with_mlx(monkeypatch):
+    # MLX as on Apple silicon, whose default device is the GPU; no array is computed on it
+    import mlx.core as mx
+
+    monkeypatch.setattr(mx, "default_device", lambda: mx.Device(mx.gpu))
+    monkeypatch.setattr(mx.metal, "is_available", lambda: True)
+
+    # `gtx.zeros` caches the constructor, with the device it translated
+    field = constructors.FieldConstructor(
+        device=core_defs.Device(core_defs.DeviceType.METAL, 0)
+    ).zeros({I: 3}, dtype=np.float32)
+
+    assert isinstance(field.ndarray, mx.array)
+    assert field.ndarray.dtype == mx.float32
+
+
+@pytest.mark.requires_mlx
+def test_metal_device_without_allocator_and_metal_raises(monkeypatch):
+    import mlx.core as mx
+
+    monkeypatch.setattr(mx.metal, "is_available", lambda: False)
+
+    with pytest.raises(ValueError, match="does not support device type"):
+        constructors.FieldConstructor(device=core_defs.Device(core_defs.DeviceType.METAL, 0))
+
+
+def test_metal_device_without_mlx_raises(monkeypatch):
+    import sys
+
+    monkeypatch.setitem(sys.modules, "mlx.core", None)  # `import mlx.core` raises
+
+    with pytest.raises(ValueError, match="needs the 'mlx' package.*allocator=mlx.core"):
+        constructors.FieldConstructor(device=core_defs.Device(core_defs.DeviceType.METAL, 0))

@@ -114,6 +114,7 @@ ND_ARRAY_IMPLEMENTATIONS: Final[list[ModuleType]] = [
     *_optional_module("cupy"),
     *_optional_module("jax.numpy"),
     *_optional_module("torch"),
+    *_optional_module("mlx.core"),
     array_api_strict,
 ]
 
@@ -126,13 +127,29 @@ def is_torch(xp: ModuleType) -> bool:
     return xp.__name__ == "torch"
 
 
+def is_mlx(xp: ModuleType) -> bool:
+    return xp.__name__ == "mlx.core"
+
+
 def is_array_api_strict(xp: ModuleType) -> bool:
     return xp.__name__ == "array_api_strict"
 
 
 def asarray(xp: ModuleType, data, dtype=None):
     """`xp.asarray` with a NumPy-style `dtype`, translated to the namespace's own dtype object."""
-    return xp.asarray(data, dtype=None if dtype is None else getattr(xp, np.dtype(dtype).name))
+    if dtype is None and is_mlx(xp):
+        # MLX would convert float64 data to float32; the tests are written for NumPy's dtypes
+        dtype = np.asarray(data).dtype
+    if dtype is None:
+        return xp.asarray(data)
+    name = np.dtype(dtype).name
+    if is_mlx(xp):
+        # the namespace of `gt4py.next` for MLX: `mlx.core.asarray` shares the memory of NumPy
+        # data and reinterprets its bytes with Metal, and names the boolean dtype only `bool_`
+        from gt4py.next.embedded.array_libraries import _mlx_namespace
+
+        return _mlx_namespace.asarray(data, dtype=getattr(_mlx_namespace, name))
+    return xp.asarray(data, dtype=getattr(xp, name))
 
 
 def nd_array_implementation_params():
@@ -140,6 +157,10 @@ def nd_array_implementation_params():
         if is_cupy(xp):
             yield pytest.param(
                 (xp, core_defs.CUPY_DEVICE_TYPE), id=xp.__name__, marks=pytest.mark.requires_gpu
+            )
+        elif is_mlx(xp):
+            yield pytest.param(
+                (xp, core_defs.DeviceType.CPU), id=xp.__name__, marks=pytest.mark.requires_mlx
             )
         else:
             yield pytest.param((xp, core_defs.DeviceType.CPU), id=xp.__name__)
