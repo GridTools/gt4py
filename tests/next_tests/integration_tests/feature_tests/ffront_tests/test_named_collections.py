@@ -657,3 +657,128 @@ def test_concat_where_with_local_fields(unstructured_case):
             np.where(vertex_mask, c, d),
         ),
     )
+
+
+class IBounds(NamedTuple):
+    lower: gtx.int32
+    split: gtx.int32
+    upper: gtx.int32
+
+
+class JBounds(NamedTuple):
+    lower: gtx.int32
+    upper: gtx.int32
+
+
+class NestedBounds(NamedTuple):
+    i: IBounds
+    j: JBounds
+    scale: gtx.int32
+
+
+@gtx.field_operator
+def split_at_bound(a: cases.IJField, bounds: NestedBounds) -> cases.IJField:
+    return concat_where(IDim < bounds.i.split, a, bounds.scale * a)
+
+
+@gtx.program
+def nested_bounds_as_field_operator_arg_program(
+    a: cases.IJField, bounds: NestedBounds, out: cases.IJField
+):
+    split_at_bound(a, bounds, out=out)
+
+
+@gtx.field_operator
+def scale_by_bound(a: cases.IJField, bounds: NestedBounds) -> cases.IJField:
+    return bounds.scale * a
+
+
+@gtx.program
+def nested_bounds_as_domain_program(a: cases.IJField, bounds: NestedBounds, out: cases.IJField):
+    scale_by_bound(
+        a,
+        bounds,
+        out=out,
+        domain={
+            IDim: (bounds.i.lower, bounds.i.upper),
+            JDim: (bounds.j.lower, bounds.j.upper),
+        },
+    )
+
+
+def _nested_bounds(case: cases.Case) -> NestedBounds:
+    size_i, size_j = case.default_sizes[IDim], case.default_sizes[JDim]
+    return NestedBounds(
+        i=IBounds(lower=gtx.int32(1), split=gtx.int32(size_i // 2), upper=gtx.int32(size_i - 1)),
+        j=JBounds(lower=gtx.int32(1), upper=gtx.int32(size_j - 1)),
+        scale=gtx.int32(2),
+    )
+
+
+def _split_at_bound_ref(a: np.ndarray, bounds: NestedBounds) -> np.ndarray:
+    i = np.arange(a.shape[0])[:, np.newaxis]
+    return np.where(i < bounds.i.split, a, bounds.scale * a)
+
+
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_concat_where
+@pytest.mark.uses_scalar_in_domain
+def test_nested_named_tuple_as_field_operator_arg(cartesian_case):
+    bounds = _nested_bounds(cartesian_case)
+    a = cases.allocate(cartesian_case, nested_bounds_as_field_operator_arg_program, "a")()
+    out = cases.allocate(cartesian_case, nested_bounds_as_field_operator_arg_program, "out")()
+
+    cases.verify(
+        cartesian_case,
+        nested_bounds_as_field_operator_arg_program,
+        a,
+        bounds,
+        out=out,
+        ref=_split_at_bound_ref(a.asnumpy(), bounds),
+    )
+
+
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_scalar_in_domain
+@pytest.mark.uses_scalar_in_domain_and_fo
+def test_nested_named_tuple_as_domain(cartesian_case):
+    bounds = _nested_bounds(cartesian_case)
+    a = cases.allocate(cartesian_case, nested_bounds_as_domain_program, "a")()
+    out = cases.allocate(cartesian_case, nested_bounds_as_domain_program, "out").zeros()()
+
+    ref = np.zeros_like(out.asnumpy())
+    region = (slice(bounds.i.lower, bounds.i.upper), slice(bounds.j.lower, bounds.j.upper))
+    ref[region] = bounds.scale * a.asnumpy()[region]
+
+    cases.verify(cartesian_case, nested_bounds_as_domain_program, a, bounds, out=out, ref=ref)
+
+
+@pytest.mark.uses_tuple_args
+@pytest.mark.uses_scalar_in_domain
+@pytest.mark.uses_scalar_in_domain_and_fo
+def test_nested_named_tuple_subscript(cartesian_case):
+    @gtx.field_operator
+    def scale_by(a: cases.IJField, scale: gtx.int32) -> cases.IJField:
+        return scale * a
+
+    @gtx.program
+    def testee(a: cases.IJField, bounds: NestedBounds, out: cases.IJField):
+        scale_by(
+            a,
+            bounds[2],
+            out=out,
+            domain={
+                IDim: (bounds[0][0], bounds[0][2]),
+                JDim: (bounds[1].lower, bounds.j[1]),
+            },
+        )
+
+    bounds = _nested_bounds(cartesian_case)
+    a = cases.allocate(cartesian_case, testee, "a")()
+    out = cases.allocate(cartesian_case, testee, "out").zeros()()
+
+    ref = np.zeros_like(out.asnumpy())
+    region = (slice(bounds.i.lower, bounds.i.upper), slice(bounds.j.lower, bounds.j.upper))
+    ref[region] = bounds.scale * a.asnumpy()[region]
+
+    cases.verify(cartesian_case, testee, a, bounds, out=out, ref=ref)

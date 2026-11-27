@@ -7,6 +7,7 @@
 # SPDX-License-Identifier: BSD-3-Clause
 
 import re
+from typing import NamedTuple
 
 import pytest
 
@@ -251,3 +252,80 @@ def test_domain_exception_6(identity_def):
     assert exc_info.match("Invalid call to 'domain_format_6'")
 
     assert re.search("Empty domain not allowed.", exc_info.value.__cause__.args[0]) is not None
+
+
+def test_tuple_subscript_type(identity_def):
+    identity = gtx.field_operator(identity_def)
+
+    def program(
+        in_field: gtx.Field[[IDim], float64],
+        out: gtx.Field[[IDim], float64],
+        t: tuple[tuple[gtx.int32, gtx.int64], gtx.int32],
+    ):
+        identity(in_field, out=out, domain={IDim: (t[1], t[0][1])})
+
+    past_node = ProgramParser.apply_to_function(program)
+
+    lower, upper = past_node.body[0].kwargs["domain"].values_[0].elts
+    assert lower.type == ts.ScalarType(kind=ts.ScalarKind.INT32)
+    assert upper.type == ts.ScalarType(kind=ts.ScalarKind.INT64)
+
+
+_InField = gtx.Field[[IDim], float64]
+
+
+@gtx.field_operator
+def _identity(x: _InField) -> _InField:
+    return x
+
+
+def _non_literal_index(
+    in_field: _InField, out: _InField, t: tuple[gtx.int32, gtx.int32], i: gtx.int32
+):
+    _identity(in_field, out=out, domain={IDim: (t[i], t[1])})
+
+
+def _out_of_range_index(in_field: _InField, out: _InField, t: tuple[gtx.int32, gtx.int32]):
+    _identity(in_field, out=out, domain={IDim: (t[0], t[2])})
+
+
+def _negative_index(in_field: _InField, out: _InField, t: tuple[gtx.int32, gtx.int32]):
+    _identity(in_field, out=out, domain={IDim: (t[0], t[-1])})
+
+
+def _bool_index(in_field: _InField, out: _InField, t: tuple[gtx.int32, gtx.int32]):
+    _identity(in_field, out=out, domain={IDim: (t[False], t[True])})
+
+
+def _scalar_index(in_field: _InField, out: _InField, s: gtx.int32):
+    _identity(in_field, out=out, domain={IDim: (0, s[0])})
+
+
+@pytest.mark.parametrize(
+    "program, message",
+    [
+        (_scalar_index, "can not be subscripted"),
+        (_non_literal_index, "Tuples need to be indexed with literal integers"),
+        (_out_of_range_index, "Tuples need to be indexed with literal integers"),
+        (_negative_index, "Tuples need to be indexed with literal integers"),
+        (_bool_index, "Tuples need to be indexed with literal integers"),
+    ],
+)
+def test_invalid_collection_element_access(program, message):
+    with pytest.raises(errors.DSLError, match=message):
+        ProgramParser.apply_to_function(program)
+
+
+def test_locally_defined_named_tuple_subscript():
+    class LocalNamedTuple(NamedTuple):
+        lower: gtx.int32
+        upper: gtx.int64
+
+    def program(in_field: _InField, out: _InField, d: LocalNamedTuple):
+        _identity(in_field, out=out, domain={IDim: (d[0], d[1])})
+
+    past_node = ProgramParser.apply_to_function(program)
+
+    lower, upper = past_node.body[0].kwargs["domain"].values_[0].elts
+    assert lower.type == ts.ScalarType(kind=ts.ScalarKind.INT32)
+    assert upper.type == ts.ScalarType(kind=ts.ScalarKind.INT64)

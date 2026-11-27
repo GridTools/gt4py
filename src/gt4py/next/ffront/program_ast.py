@@ -64,7 +64,7 @@ class Call(Expr):
 
 
 class Subscript(Expr):
-    value: Name
+    value: Expr
     slice_: Expr
 
 
